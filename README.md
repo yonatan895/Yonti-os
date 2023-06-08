@@ -4,7 +4,8 @@ You'll need to have access to rustup and cargo. QEMU is also needed. Currently f
 
 Follow the steps below in order to run the operating system
 
-```git clone https://github.com/yonatan895/Yonti-os
+```
+git clone https://github.com/yonatan895/Yonti-os
 
 cd Yonti-os
 
@@ -16,4 +17,5 @@ rustup component add llvm-tools-preview
 
 cargo install bootimage
 
-cargo run```
+cargo run
+```
