@@ -5,7 +5,8 @@ use core::panic::PanicInfo;
 
 /// This function is called on panic
 #[panic_handler]
-fn panic(_info: &PanicInfo) -> ! {
+fn panic(info: &PanicInfo) -> ! {
+    println!("{}", info);
     loop {}
 }
 
@@ -15,6 +16,8 @@ mod vga_buffer;
 pub extern "C" fn _start() -> ! {
     // This function is the entry point, since the linker looks for a function name '_start' by
     // default
-    vga_buffer::print_something();
+    println!("Hello World{}", "!");
+    panic!("Some panic messege");
+
     loop {}
 }
