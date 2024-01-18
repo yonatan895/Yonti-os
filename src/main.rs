@@ -13,7 +13,7 @@ use yonti_os::println;
 
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
-    println!("Hello World{}", "!");
+    println!("Welcome to YontiOS{}", "!");
 
     #[cfg(test)]
     test_main();
