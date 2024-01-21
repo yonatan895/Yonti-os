@@ -1,16 +1,11 @@
 #![no_std]
 #![no_main]
-
-
 #![feature(abi_x86_interrupt)]
 
-use yonti_os::{exit_qemu, QemuExitCode, serial_println, serial_print};
+use core::panic::PanicInfo;
 use lazy_static::lazy_static;
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame};
-use core::panic::PanicInfo;
-
-
-
+use yonti_os::{exit_qemu, serial_print, serial_println, QemuExitCode};
 
 extern "x86-interrupt" fn test_double_fault_handler(
     _stack_frame: InterruptStackFrame,
@@ -20,9 +15,6 @@ extern "x86-interrupt" fn test_double_fault_handler(
     exit_qemu(QemuExitCode::Success);
     loop {}
 }
-
-
-
 
 lazy_static! {
     static ref TEST_IDT: InterruptDescriptorTable = {
@@ -41,21 +33,16 @@ pub fn init_test_idt() {
     TEST_IDT.load();
 }
 
-
-
 #[allow(unconditional_recursion)]
 fn stack_overflow() {
     stack_overflow();
     volatile::Volatile::new(0).read(); // Prevents tail recursion optimizations
 }
 
-
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     yonti_os::test_panic_handler(info)
 }
-
-
 
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
@@ -68,4 +55,3 @@ pub extern "C" fn _start() -> ! {
 
     panic!("Continued after stack overflow!");
 }
-

@@ -1,8 +1,8 @@
+use core::fmt;
+use core::fmt::Write;
 use lazy_static::lazy_static;
 use spin::Mutex;
-use core::fmt;
 use volatile::Volatile;
-use core::fmt::Write;
 use x86_64::instructions::interrupts;
 
 #[allow(dead_code)]
@@ -111,14 +111,12 @@ impl Writer {
     }
 }
 
-
 impl fmt::Write for Writer {
     fn write_str(&mut self, s: &str) -> fmt::Result {
         self.write_string(s);
         Ok(())
     }
 }
-
 
 lazy_static! {
     pub static ref WRITER: Mutex<Writer> = Mutex::new(Writer {
@@ -148,7 +146,6 @@ pub fn _print(args: fmt::Arguments) {
     });
 }
 
-
 #[test_case]
 fn test_println_output() {
     let s = "Some test string that fits on a single line";
@@ -160,5 +157,4 @@ fn test_println_output() {
             assert_eq!(char::from(screen_char.ascii_character), c);
         }
     });
-
 }

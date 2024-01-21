@@ -13,12 +13,10 @@ pub extern "C" fn _start() -> ! {
     loop {}
 }
 
-
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     yonti_os::test_panic_handler(info)
 }
-
 
 use yonti_os::println;
 
