@@ -11,12 +11,12 @@ pub extern "C" fn _start() -> ! {
     println!("Welcome to YontiOS{}", "!");
     yonti_os::init();
 
-
     let ptr = 0xdeadbeaf as *mut u8;
-    unsafe { *ptr = 42; }
+    unsafe {
+        *ptr = 42;
+    }
     #[cfg(test)]
     test_main();
-
 
     println!("Didn't crash!");
     yonti_os::hlt_loop();
