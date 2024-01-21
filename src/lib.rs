@@ -11,13 +11,13 @@ pub mod serial;
 pub mod vga_buffer;
 
 use core::panic::PanicInfo;
-use x86_64;
 
 pub fn init() {
+    use x86_64::instructions;
     gdt::init();
     interrupts::init_idt();
     unsafe { interrupts::PICS.lock().initialize() };
-    ::x86_64::instructions::interrupts::enable();
+    instructions::interrupts::enable();
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -35,7 +35,7 @@ pub fn exit_qemu(exit_code: QemuExitCode) {
 }
 
 pub trait Testable {
-    fn run(&self) -> ();
+    fn run(&self);
 }
 
 impl<T> Testable for T
@@ -48,7 +48,6 @@ where
         serial_println!("[ok]");
     }
 }
-
 pub fn test_runner(tests: &[&dyn Testable]) {
     serial_println!("Running {} tests", tests.len());
     for test in tests {

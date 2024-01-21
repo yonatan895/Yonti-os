@@ -1,0 +1,114 @@
+delayed span bug: `Res::Err` but no error emitted
+   0: <rustc_errors::DiagCtxtInner>::emit_diagnostic
+   1: <rustc_errors::DiagCtxt>::emit_diagnostic
+   2: <rustc_span::ErrorGuaranteed as rustc_errors::diagnostic_builder::EmissionGuarantee>::emit_producing_guarantee
+   3: <rustc_hir_typeck::fn_ctxt::FnCtxt>::check_expr_path
+   4: <rustc_hir_typeck::fn_ctxt::FnCtxt>::check_expr_with_expectation_and_args
+   5: <rustc_hir_typeck::fn_ctxt::FnCtxt>::check_expr_with_expectation_and_args
+   6: <rustc_hir_typeck::fn_ctxt::FnCtxt>::check_expr_with_expectation_and_args
+   7: <rustc_hir_typeck::fn_ctxt::FnCtxt>::check_expr_with_expectation_and_args
+   8: <rustc_hir_typeck::fn_ctxt::FnCtxt>::check_argument_types
+   9: <rustc_hir_typeck::fn_ctxt::FnCtxt>::check_call
+  10: <rustc_hir_typeck::fn_ctxt::FnCtxt>::check_expr_with_expectation_and_args
+  11: <rustc_hir_typeck::fn_ctxt::FnCtxt>::check_block_with_expected
+  12: <rustc_hir_typeck::fn_ctxt::FnCtxt>::check_expr_with_expectation_and_args
+  13: rustc_hir_typeck::check::check_fn
+  14: rustc_hir_typeck::typeck
+  15: rustc_query_impl::plumbing::__rust_begin_short_backtrace::<rustc_query_impl::query_impl::typeck::dynamic_query::{closure#2}::{closure#0}, rustc_middle::query::erase::Erased<[u8; 8]>>
+  16: rustc_query_system::query::plumbing::try_execute_query::<rustc_query_impl::DynamicConfig<rustc_query_system::query::caches::VecCache<rustc_span::def_id::LocalDefId, rustc_middle::query::erase::Erased<[u8; 8]>>, false, false, false>, rustc_query_impl::plumbing::QueryCtxt, true>
+  17: rustc_query_impl::query_impl::typeck::get_query_incr::__rust_end_short_backtrace
+  18: <rustc_middle::hir::map::Map>::par_body_owners::<rustc_hir_analysis::check_crate::{closure#6}>::{closure#0}
+  19: rustc_hir_analysis::check_crate
+  20: rustc_interface::passes::analysis
+  21: rustc_query_impl::plumbing::__rust_begin_short_backtrace::<rustc_query_impl::query_impl::analysis::dynamic_query::{closure#2}::{closure#0}, rustc_middle::query::erase::Erased<[u8; 1]>>
+  22: rustc_query_system::query::plumbing::try_execute_query::<rustc_query_impl::DynamicConfig<rustc_query_system::query::caches::SingleCache<rustc_middle::query::erase::Erased<[u8; 1]>>, false, false, false>, rustc_query_impl::plumbing::QueryCtxt, true>
+  23: rustc_query_impl::query_impl::analysis::get_query_incr::__rust_end_short_backtrace
+  24: rustc_interface::interface::run_compiler::<core::result::Result<(), rustc_span::ErrorGuaranteed>, rustc_driver_impl::run_compiler::{closure#0}>::{closure#0}
+  25: std::sys_common::backtrace::__rust_begin_short_backtrace::<rustc_interface::util::run_in_thread_with_globals<rustc_interface::util::run_in_thread_pool_with_globals<rustc_interface::interface::run_compiler<core::result::Result<(), rustc_span::ErrorGuaranteed>, rustc_driver_impl::run_compiler::{closure#0}>::{closure#0}, core::result::Result<(), rustc_span::ErrorGuaranteed>>::{closure#0}, core::result::Result<(), rustc_span::ErrorGuaranteed>>::{closure#0}::{closure#0}, core::result::Result<(), rustc_span::ErrorGuaranteed>>
+  26: <<std::thread::Builder>::spawn_unchecked_<rustc_interface::util::run_in_thread_with_globals<rustc_interface::util::run_in_thread_pool_with_globals<rustc_interface::interface::run_compiler<core::result::Result<(), rustc_span::ErrorGuaranteed>, rustc_driver_impl::run_compiler::{closure#0}>::{closure#0}, core::result::Result<(), rustc_span::ErrorGuaranteed>>::{closure#0}, core::result::Result<(), rustc_span::ErrorGuaranteed>>::{closure#0}::{closure#0}, core::result::Result<(), rustc_span::ErrorGuaranteed>>::{closure#1} as core::ops::function::FnOnce<()>>::call_once::{shim:vtable#0}
+  27: <alloc::boxed::Box<F,A> as core::ops::function::FnOnce<Args>>::call_once
+             at /rustc/6ae4cfbbb080cafea7f6be48ce47678ee057352c/library/alloc/src/boxed.rs:2016:9
+  28: <alloc::boxed::Box<F,A> as core::ops::function::FnOnce<Args>>::call_once
+             at /rustc/6ae4cfbbb080cafea7f6be48ce47678ee057352c/library/alloc/src/boxed.rs:2016:9
+  29: std::sys::pal::unix::thread::Thread::new::thread_start
+             at /rustc/6ae4cfbbb080cafea7f6be48ce47678ee057352c/library/std/src/sys/pal/unix/thread.rs:108:17
+  30: <unknown>
+  31: <unknown>
+
+delayed span bug: TyKind::Error constructed but no error reported
+   0: <rustc_errors::DiagCtxtInner>::emit_diagnostic
+   1: <rustc_errors::DiagCtxt>::emit_diagnostic
+   2: <rustc_span::ErrorGuaranteed as rustc_errors::diagnostic_builder::EmissionGuarantee>::emit_producing_guarantee
+   3: <rustc_middle::ty::Ty>::new_misc_error
+   4: <rustc_hir_typeck::fn_ctxt::FnCtxt>::check_expr_with_expectation_and_args
+   5: <rustc_hir_typeck::fn_ctxt::FnCtxt>::check_expr_with_expectation_and_args
+   6: <rustc_hir_typeck::fn_ctxt::FnCtxt>::check_expr_with_expectation_and_args
+   7: <rustc_hir_typeck::fn_ctxt::FnCtxt>::check_argument_types
+   8: <rustc_hir_typeck::fn_ctxt::FnCtxt>::check_call
+   9: <rustc_hir_typeck::fn_ctxt::FnCtxt>::check_expr_with_expectation_and_args
+  10: <rustc_hir_typeck::fn_ctxt::FnCtxt>::check_block_with_expected
+  11: <rustc_hir_typeck::fn_ctxt::FnCtxt>::check_expr_with_expectation_and_args
+  12: rustc_hir_typeck::check::check_fn
+  13: rustc_hir_typeck::typeck
+  14: rustc_query_impl::plumbing::__rust_begin_short_backtrace::<rustc_query_impl::query_impl::typeck::dynamic_query::{closure#2}::{closure#0}, rustc_middle::query::erase::Erased<[u8; 8]>>
+  15: rustc_query_system::query::plumbing::try_execute_query::<rustc_query_impl::DynamicConfig<rustc_query_system::query::caches::VecCache<rustc_span::def_id::LocalDefId, rustc_middle::query::erase::Erased<[u8; 8]>>, false, false, false>, rustc_query_impl::plumbing::QueryCtxt, true>
+  16: rustc_query_impl::query_impl::typeck::get_query_incr::__rust_end_short_backtrace
+  17: <rustc_middle::hir::map::Map>::par_body_owners::<rustc_hir_analysis::check_crate::{closure#6}>::{closure#0}
+  18: rustc_hir_analysis::check_crate
+  19: rustc_interface::passes::analysis
+  20: rustc_query_impl::plumbing::__rust_begin_short_backtrace::<rustc_query_impl::query_impl::analysis::dynamic_query::{closure#2}::{closure#0}, rustc_middle::query::erase::Erased<[u8; 1]>>
+  21: rustc_query_system::query::plumbing::try_execute_query::<rustc_query_impl::DynamicConfig<rustc_query_system::query::caches::SingleCache<rustc_middle::query::erase::Erased<[u8; 1]>>, false, false, false>, rustc_query_impl::plumbing::QueryCtxt, true>
+  22: rustc_query_impl::query_impl::analysis::get_query_incr::__rust_end_short_backtrace
+  23: rustc_interface::interface::run_compiler::<core::result::Result<(), rustc_span::ErrorGuaranteed>, rustc_driver_impl::run_compiler::{closure#0}>::{closure#0}
+  24: std::sys_common::backtrace::__rust_begin_short_backtrace::<rustc_interface::util::run_in_thread_with_globals<rustc_interface::util::run_in_thread_pool_with_globals<rustc_interface::interface::run_compiler<core::result::Result<(), rustc_span::ErrorGuaranteed>, rustc_driver_impl::run_compiler::{closure#0}>::{closure#0}, core::result::Result<(), rustc_span::ErrorGuaranteed>>::{closure#0}, core::result::Result<(), rustc_span::ErrorGuaranteed>>::{closure#0}::{closure#0}, core::result::Result<(), rustc_span::ErrorGuaranteed>>
+  25: <<std::thread::Builder>::spawn_unchecked_<rustc_interface::util::run_in_thread_with_globals<rustc_interface::util::run_in_thread_pool_with_globals<rustc_interface::interface::run_compiler<core::result::Result<(), rustc_span::ErrorGuaranteed>, rustc_driver_impl::run_compiler::{closure#0}>::{closure#0}, core::result::Result<(), rustc_span::ErrorGuaranteed>>::{closure#0}, core::result::Result<(), rustc_span::ErrorGuaranteed>>::{closure#0}::{closure#0}, core::result::Result<(), rustc_span::ErrorGuaranteed>>::{closure#1} as core::ops::function::FnOnce<()>>::call_once::{shim:vtable#0}
+  26: <alloc::boxed::Box<F,A> as core::ops::function::FnOnce<Args>>::call_once
+             at /rustc/6ae4cfbbb080cafea7f6be48ce47678ee057352c/library/alloc/src/boxed.rs:2016:9
+  27: <alloc::boxed::Box<F,A> as core::ops::function::FnOnce<Args>>::call_once
+             at /rustc/6ae4cfbbb080cafea7f6be48ce47678ee057352c/library/alloc/src/boxed.rs:2016:9
+  28: std::sys::pal::unix::thread::Thread::new::thread_start
+             at /rustc/6ae4cfbbb080cafea7f6be48ce47678ee057352c/library/std/src/sys/pal/unix/thread.rs:108:17
+  29: <unknown>
+  30: <unknown>
+
+delayed span bug: TyKind::Error constructed but no error reported
+   0: <rustc_errors::DiagCtxtInner>::emit_diagnostic
+   1: <rustc_errors::DiagCtxt>::emit_diagnostic
+   2: <rustc_span::ErrorGuaranteed as rustc_errors::diagnostic_builder::EmissionGuarantee>::emit_producing_guarantee
+   3: <rustc_middle::ty::Ty>::new_misc_error
+   4: <rustc_hir_typeck::fn_ctxt::FnCtxt>::check_expr_with_expectation_and_args
+   5: <rustc_hir_typeck::fn_ctxt::FnCtxt>::check_argument_types
+   6: <rustc_hir_typeck::fn_ctxt::FnCtxt>::check_call
+   7: <rustc_hir_typeck::fn_ctxt::FnCtxt>::check_expr_with_expectation_and_args
+   8: <rustc_hir_typeck::fn_ctxt::FnCtxt>::check_block_with_expected
+   9: <rustc_hir_typeck::fn_ctxt::FnCtxt>::check_expr_with_expectation_and_args
+  10: rustc_hir_typeck::check::check_fn
+  11: rustc_hir_typeck::typeck
+  12: rustc_query_impl::plumbing::__rust_begin_short_backtrace::<rustc_query_impl::query_impl::typeck::dynamic_query::{closure#2}::{closure#0}, rustc_middle::query::erase::Erased<[u8; 8]>>
+  13: rustc_query_system::query::plumbing::try_execute_query::<rustc_query_impl::DynamicConfig<rustc_query_system::query::caches::VecCache<rustc_span::def_id::LocalDefId, rustc_middle::query::erase::Erased<[u8; 8]>>, false, false, false>, rustc_query_impl::plumbing::QueryCtxt, true>
+  14: rustc_query_impl::query_impl::typeck::get_query_incr::__rust_end_short_backtrace
+  15: <rustc_middle::hir::map::Map>::par_body_owners::<rustc_hir_analysis::check_crate::{closure#6}>::{closure#0}
+  16: rustc_hir_analysis::check_crate
+  17: rustc_interface::passes::analysis
+  18: rustc_query_impl::plumbing::__rust_begin_short_backtrace::<rustc_query_impl::query_impl::analysis::dynamic_query::{closure#2}::{closure#0}, rustc_middle::query::erase::Erased<[u8; 1]>>
+  19: rustc_query_system::query::plumbing::try_execute_query::<rustc_query_impl::DynamicConfig<rustc_query_system::query::caches::SingleCache<rustc_middle::query::erase::Erased<[u8; 1]>>, false, false, false>, rustc_query_impl::plumbing::QueryCtxt, true>
+  20: rustc_query_impl::query_impl::analysis::get_query_incr::__rust_end_short_backtrace
+  21: rustc_interface::interface::run_compiler::<core::result::Result<(), rustc_span::ErrorGuaranteed>, rustc_driver_impl::run_compiler::{closure#0}>::{closure#0}
+  22: std::sys_common::backtrace::__rust_begin_short_backtrace::<rustc_interface::util::run_in_thread_with_globals<rustc_interface::util::run_in_thread_pool_with_globals<rustc_interface::interface::run_compiler<core::result::Result<(), rustc_span::ErrorGuaranteed>, rustc_driver_impl::run_compiler::{closure#0}>::{closure#0}, core::result::Result<(), rustc_span::ErrorGuaranteed>>::{closure#0}, core::result::Result<(), rustc_span::ErrorGuaranteed>>::{closure#0}::{closure#0}, core::result::Result<(), rustc_span::ErrorGuaranteed>>
+  23: <<std::thread::Builder>::spawn_unchecked_<rustc_interface::util::run_in_thread_with_globals<rustc_interface::util::run_in_thread_pool_with_globals<rustc_interface::interface::run_compiler<core::result::Result<(), rustc_span::ErrorGuaranteed>, rustc_driver_impl::run_compiler::{closure#0}>::{closure#0}, core::result::Result<(), rustc_span::ErrorGuaranteed>>::{closure#0}, core::result::Result<(), rustc_span::ErrorGuaranteed>>::{closure#0}::{closure#0}, core::result::Result<(), rustc_span::ErrorGuaranteed>>::{closure#1} as core::ops::function::FnOnce<()>>::call_once::{shim:vtable#0}
+  24: <alloc::boxed::Box<F,A> as core::ops::function::FnOnce<Args>>::call_once
+             at /rustc/6ae4cfbbb080cafea7f6be48ce47678ee057352c/library/alloc/src/boxed.rs:2016:9
+  25: <alloc::boxed::Box<F,A> as core::ops::function::FnOnce<Args>>::call_once
+             at /rustc/6ae4cfbbb080cafea7f6be48ce47678ee057352c/library/alloc/src/boxed.rs:2016:9
+  26: std::sys::pal::unix::thread::Thread::new::thread_start
+             at /rustc/6ae4cfbbb080cafea7f6be48ce47678ee057352c/library/std/src/sys/pal/unix/thread.rs:108:17
+  27: <unknown>
+  28: <unknown>
+
+
+
+rustc version: 1.77.0-nightly (6ae4cfbbb 2024-01-17)
+platform: x86_64-unknown-linux-gnu
+
+query stack during panic:
+end of query stack
