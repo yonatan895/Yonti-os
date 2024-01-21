@@ -4,17 +4,19 @@
 #![test_runner(yonti_os::test_runner)]
 #![reexport_test_harness_main = "test_main"]
 use core::panic::PanicInfo;
+use x86_64::registers::control::Cr3;
 use yonti_os::println;
 
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
     println!("Welcome to YontiOS{}", "!");
     yonti_os::init();
+    let (level_4_page_table, _) = Cr3::read();
+    println!(
+        "Level  level 4 page table at: {:?}",
+        level_4_page_table.start_address()
+    );
 
-    let ptr = 0xdeadbeaf as *mut u8;
-    unsafe {
-        *ptr = 42;
-    }
     #[cfg(test)]
     test_main();
 
