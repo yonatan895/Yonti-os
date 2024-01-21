@@ -12,17 +12,10 @@ use yonti_os::println;
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
     println!("Welcome to YontiOS{}", "!");
-    
     yonti_os::init();
-
-    x86_64::instructions::interrupts::int3();
-
-    #[cfg(test)]
-    test_main();
-
     println!("Didn't crash!");
+    yonti_os::hlt_loop();
 
-    loop {}
 }
 
 /// This function is called on panic.
@@ -30,7 +23,7 @@ pub extern "C" fn _start() -> ! {
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     println!("{}", info);
-    loop {}
+    yonti_os::hlt_loop();
 }
 
 #[cfg(test)]
