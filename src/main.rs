@@ -4,14 +4,13 @@
 #![test_runner(yonti_os::test_runner)]
 #![reexport_test_harness_main = "test_main"]
 
-
 extern crate alloc;
 
-use alloc::{boxed::Box, vec, vec::Vec, rc::Rc};
+use alloc::{boxed::Box, rc::Rc, vec, vec::Vec};
 use bootloader::{entry_point, BootInfo};
-use yonti_os::allocator;
 use core::panic::PanicInfo;
 use x86_64::{structures::paging::Page, VirtAddr};
+use yonti_os::allocator;
 use yonti_os::memory;
 use yonti_os::println;
 
@@ -46,9 +45,15 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
     // create a reference counted vector -> will be freed when count reaches 0
     let reference_counted = Rc::new(vec![1, 2, 3]);
     let cloned_reference = reference_counted.clone();
-    println!("current reference count is {}", Rc::strong_count(&cloned_reference));
+    println!(
+        "current reference count is {}",
+        Rc::strong_count(&cloned_reference)
+    );
     core::mem::drop(reference_counted);
-    println!("reference count is {} now", Rc::strong_count(&cloned_reference));
+    println!(
+        "reference count is {} now",
+        Rc::strong_count(&cloned_reference)
+    );
 
     #[cfg(test)]
     test_main();
