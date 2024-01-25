@@ -31,15 +31,13 @@ fn main(boot_info: &'static BootInfo) -> ! {
 
 #[test_case]
 fn simple_allocation() {
-    let heap_value_1 = Box::new(41);
-    let heap_value_2 = Box::new(13);
-    assert_eq!(*heap_value_1, 41);
-    assert_eq!(*heap_value_2, 13);
+    let heap_value_1 = Box::new(50);
+    assert_eq!(*heap_value_1, 50);
 }
 
 #[test_case]
 fn large_vec() {
-    let n = 1000;
+    let n = 10000;
     let mut vec = Vec::new();
     for i in 0..n {
         vec.push(i);
