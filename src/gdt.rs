@@ -1,4 +1,4 @@
-use core::ptr::addr_of;
+use core::{convert::TryFrom, ptr::addr_of};
 use lazy_static::lazy_static;
 use x86_64::structures::{
     gdt::{Descriptor, GlobalDescriptorTable, SegmentSelector},
@@ -16,7 +16,7 @@ lazy_static! {
             static mut STACK: [u8; STACK_SIZE] = [0; STACK_SIZE];
 
             let stack_start = VirtAddr::from_ptr(unsafe { addr_of!(STACK) });
-            stack_start + STACK_SIZE
+            stack_start + u64::try_from(STACK_SIZE).unwrap()
         };
         tss
     };
@@ -30,8 +30,8 @@ struct Selectors {
 lazy_static! {
     static ref GDT: (GlobalDescriptorTable, Selectors) = {
         let mut gdt = GlobalDescriptorTable::new();
-        let code_selector = gdt.add_entry(Descriptor::kernel_code_segment());
-        let tss_selector = gdt.add_entry(Descriptor::tss_segment(&TSS));
+        let code_selector = gdt.push(Descriptor::kernel_code_segment());
+        let tss_selector = gdt.push(Descriptor::tss_segment(&TSS));
         (
             gdt,
             Selectors {
