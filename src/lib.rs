@@ -14,12 +14,14 @@ pub mod memory;
 pub mod serial;
 pub mod task;
 pub mod vga_buffer;
+pub mod sse;
 
 use core::panic::PanicInfo;
 
 pub fn init() {
     use x86_64::instructions;
     gdt::init();
+    unsafe { sse::init(); }
     interrupts::init_idt();
     unsafe { interrupts::PICS.lock().initialize() };
     instructions::interrupts::enable();
