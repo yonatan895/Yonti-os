@@ -36,7 +36,7 @@ unsafe impl GlobalAlloc for Dummy {
     }
 
     unsafe fn dealloc(&self, _ptr: *mut u8, _layout: Layout) {
-        panic!("dealloc should be never called")
+        panic!("dealloc should never be called")
     }
 }
 
@@ -65,9 +65,10 @@ pub fn init_heap(
             .ok_or(MapToError::FrameAllocationFailed)?;
         let flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE;
         unsafe { mapper.map_to(page, frame, flags, frame_allocator)?.flush() };
-        unsafe {
-            ALLOCATOR.lock().init(HEAP_START, HEAP_SIZE);
-        }
+    }
+
+    unsafe {
+        ALLOCATOR.lock().init(HEAP_START, HEAP_SIZE);
     }
 
     Ok(())
