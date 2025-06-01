@@ -8,6 +8,7 @@ use core::panic::PanicInfo;
 
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
+    yonti_os::init();
     test_main();
 
     loop {}
