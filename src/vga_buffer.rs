@@ -142,6 +142,7 @@ macro_rules! println {
 #[doc(hidden)]
 pub fn _print(args: fmt::Arguments) {
     interrupts::without_interrupts(|| {
+        crate::serial::_print(args);
         WRITER.lock().write_fmt(args).unwrap();
     });
 }

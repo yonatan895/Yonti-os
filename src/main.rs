@@ -10,6 +10,7 @@ use bootloader::{entry_point, BootInfo};
 use core::panic::PanicInfo;
 use x86_64::VirtAddr;
 use yonti_os::allocator;
+use yonti_os::fs;
 use yonti_os::memory;
 use yonti_os::println;
 use yonti_os::task::keyboard;
@@ -28,6 +29,8 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 
     allocator::init_heap(&mut mapper, &mut frame_allocator).expect("Heap init failed");
 
+    demo_fs();
+
     #[cfg(test)]
     test_main();
 
@@ -44,6 +47,25 @@ async fn async_number() -> u32 {
 async fn example_task() {
     let number = async_number().await;
     println!("async number: {}", number);
+}
+
+fn demo_fs() {
+    let mut fs = fs::FS.lock();
+    fs.create_file("/hello.txt").expect("create /hello.txt");
+    fs.write_file("/hello.txt", b"Hello from Yonti-os filesystem!")
+        .expect("write /hello.txt");
+    if let Ok(data) = fs.read_file("/hello.txt") {
+        if let Ok(s) = core::str::from_utf8(&data) {
+            println!("[fs] /hello.txt: {}", s);
+        }
+    }
+    fs.create_dir("/home").expect("create /home");
+    fs.create_file("/home/test").expect("create /home/test");
+    fs.write_file("/home/test", b"nested file!").expect("write /home/test");
+    let contents = fs.list_dir("/").expect("list /");
+    println!("[fs] / contents: {:?}", contents);
+    let contents = fs.list_dir("/home").expect("list /home");
+    println!("[fs] /home contents: {:?}", contents);
 }
 
 /// This function is called on panic.
