@@ -1,35 +1,48 @@
-#![no_std] // don't link the Rust standard library
-#![no_main] // disable all Rust-level entry points
-#![feature(custom_test_frameworks)] // Because #![no_std]
+#![no_std]
+#![no_main]
+#![feature(custom_test_frameworks)]
 #![test_runner(yonti_os::test_runner)]
 #![reexport_test_harness_main = "test_main"]
 
 extern crate alloc;
 
-use bootloader::{entry_point, BootInfo};
+use bootloader_api::{entry_point, BootInfo};
 use core::panic::PanicInfo;
 use x86_64::VirtAddr;
 use yonti_os::allocator;
 use yonti_os::fs;
 use yonti_os::memory;
-use yonti_os::println;
 use yonti_os::task::keyboard;
 use yonti_os::task::{executor::Executor, Task};
+use yonti_os::println;
 
-entry_point!(kernel_main);
-fn kernel_main(boot_info: &'static BootInfo) -> ! {
-    println!("Welcome to YontiOS{}", "!");
+entry_point!(kernel_main, config = &yonti_os::BOOTLOADER_CONFIG);
+fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     yonti_os::init();
 
-    let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset);
+    if let Some(fb) = boot_info.framebuffer.take() {
+        let info = fb.info();
+        let buffer = fb.into_buffer();
+        yonti_os::framebuffer::init(buffer, info);
+    }
+    println!("Framebuffer initialized");
+
+    let phys_mem_offset = VirtAddr::new(
+        boot_info
+            .physical_memory_offset
+            .into_option()
+            .expect("physical memory offset not set"),
+    );
 
     let mut mapper = unsafe { memory::init(phys_mem_offset) };
     let mut frame_allocator =
-        unsafe { memory::BootInfoFrameAllocator::init(&boot_info.memory_map) };
+        unsafe { memory::BootInfoFrameAllocator::init(&mut boot_info.memory_regions) };
 
     allocator::init_heap(&mut mapper, &mut frame_allocator).expect("Heap init failed");
+    println!("Heap init done");
 
     demo_fs();
+    println!("FS demo done");
 
     #[cfg(test)]
     test_main();
@@ -68,11 +81,10 @@ fn demo_fs() {
     println!("[fs] /home contents: {:?}", contents);
 }
 
-/// This function is called on panic.
 #[cfg(not(test))]
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    println!("{}", info);
+    println!("PANIC: {}", info);
     yonti_os::hlt_loop();
 }
 
