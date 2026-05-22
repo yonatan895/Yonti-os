@@ -4,14 +4,21 @@
 #![test_runner(yonti_os::test_runner)]
 #![reexport_test_harness_main = "test_main"]
 
+use bootloader_api::{entry_point, BootInfo};
 use core::panic::PanicInfo;
+use yonti_os::framebuffer;
 
-#[no_mangle]
-pub extern "C" fn _start() -> ! {
+entry_point!(test_kernel_main, config = &yonti_os::BOOTLOADER_CONFIG);
+
+fn test_kernel_main(boot_info: &'static mut BootInfo) -> ! {
     yonti_os::init();
+    if let Some(fb) = boot_info.framebuffer.take() {
+        let info = fb.info();
+        let buffer = fb.into_buffer();
+        framebuffer::init(buffer, info);
+    }
     test_main();
-
-    loop {}
+    yonti_os::hlt_loop();
 }
 
 #[panic_handler]

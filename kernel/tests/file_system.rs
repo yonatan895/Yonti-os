@@ -6,24 +6,35 @@
 
 extern crate alloc;
 
-use bootloader::{entry_point, BootInfo};
+use bootloader_api::{entry_point, BootInfo};
 use core::panic::PanicInfo;
+use x86_64::VirtAddr;
+use yonti_os::allocator;
+use yonti_os::framebuffer;
+use yonti_os::memory::{self, BootInfoFrameAllocator};
 
-entry_point!(main);
+entry_point!(main, config = &yonti_os::BOOTLOADER_CONFIG);
 
-fn main(boot_info: &'static BootInfo) -> ! {
-    use x86_64::VirtAddr;
-    use yonti_os::allocator;
-    use yonti_os::memory::{self, BootInfoFrameAllocator};
-
+fn main(boot_info: &'static mut BootInfo) -> ! {
     yonti_os::init();
-    let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset);
+    if let Some(fb) = boot_info.framebuffer.take() {
+        let info = fb.info();
+        let buffer = fb.into_buffer();
+        framebuffer::init(buffer, info);
+    }
+
+    let phys_mem_offset = VirtAddr::new(
+        boot_info
+            .physical_memory_offset
+            .into_option()
+            .expect("physical_memory_offset not set"),
+    );
     let mut mapper = unsafe { memory::init(phys_mem_offset) };
-    let mut frame_allocator = unsafe { BootInfoFrameAllocator::init(&boot_info.memory_map) };
+    let mut frame_allocator = unsafe { BootInfoFrameAllocator::init(&mut boot_info.memory_regions) };
     allocator::init_heap(&mut mapper, &mut frame_allocator).expect("heap initialization failed");
 
     test_main();
-    loop {}
+    yonti_os::hlt_loop();
 }
 
 #[test_case]

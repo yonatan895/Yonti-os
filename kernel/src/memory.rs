@@ -1,4 +1,4 @@
-use bootloader::bootinfo::{MemoryMap, MemoryRegionType};
+use bootloader_api::info::{MemoryRegionKind, MemoryRegions};
 use x86_64::registers::control::Cr3;
 use x86_64::{
     structures::paging::{
@@ -10,33 +10,30 @@ use x86_64::{
 
 /// A FrameAllocator that returns usable frames from the bootloader's memory map.
 pub struct BootInfoFrameAllocator {
-    memory_map: &'static MemoryMap,
+    memory_regions: &'static mut [bootloader_api::info::MemoryRegion],
     next: usize,
 }
 
 impl BootInfoFrameAllocator {
     /// # Safety
-    /// Create a FrameAllocator from the passed memory map.
+    /// Create a FrameAllocator from the passed memory regions.
     ///
     /// This function is unsafe because the caller must guarantee that the passed
-    /// memory map is valid. The main requirement is that all frames that are marked
+    /// memory regions are valid. The main requirement is that all frames that are marked
     /// as `USABLE` in it are really unused.
-    pub unsafe fn init(memory_map: &'static MemoryMap) -> Self {
+    pub unsafe fn init(memory_regions: &'static mut MemoryRegions) -> Self {
         BootInfoFrameAllocator {
-            memory_map,
+            memory_regions: &mut *memory_regions,
             next: 0,
         }
     }
 
-    fn usable_frames(&self) -> impl Iterator<Item = PhysFrame> {
-        // get usable regions from memory map
-        let regions = self.memory_map.iter();
-        let usable_regions = regions.filter(|r| r.region_type == MemoryRegionType::Usable);
-        // map each region to its address range
-        let addr_ranges = usable_regions.map(|r| r.range.start_addr()..r.range.end_addr());
-        // transform to an iterator of frame start addresses
-        let frame_addresses = addr_ranges.flat_map(|r| r.step_by(4096));
-        // create `PhysFrame` types from the start addresses
+    fn usable_frames(&self) -> impl Iterator<Item = PhysFrame> + use<'_> {
+        let usable_regions = self
+            .memory_regions
+            .iter()
+            .filter(|r| r.kind == MemoryRegionKind::Usable);
+        let frame_addresses = usable_regions.flat_map(|r| (r.start..r.end).step_by(4096));
         frame_addresses.map(|addr| PhysFrame::containing_address(PhysAddr::new(addr)))
     }
 }
