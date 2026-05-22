@@ -2,6 +2,7 @@
 #![no_main]
 #![feature(abi_x86_interrupt)]
 
+use bootloader_api::{entry_point, BootInfo};
 use core::panic::PanicInfo;
 use lazy_static::lazy_static;
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame};
@@ -13,7 +14,7 @@ extern "x86-interrupt" fn test_double_fault_handler(
 ) -> ! {
     serial_println!("[ok]");
     exit_qemu(QemuExitCode::Success);
-    loop {}
+    yonti_os::hlt_loop();
 }
 
 lazy_static! {
@@ -36,16 +37,12 @@ pub fn init_test_idt() {
 #[allow(unconditional_recursion)]
 fn stack_overflow() {
     stack_overflow();
-    volatile::Volatile::new(0).read(); // Prevents tail recursion optimizations
+    volatile::Volatile::new(0).read();
 }
 
-#[panic_handler]
-fn panic(info: &PanicInfo) -> ! {
-    yonti_os::test_panic_handler(info)
-}
+entry_point!(test_kernel_main, config = &yonti_os::BOOTLOADER_CONFIG);
 
-#[no_mangle]
-pub extern "C" fn _start() -> ! {
+fn test_kernel_main(_boot_info: &'static mut BootInfo) -> ! {
     serial_print!("stack_overflow::stack_overflow...\t");
 
     yonti_os::gdt::init();
@@ -54,4 +51,9 @@ pub extern "C" fn _start() -> ! {
     stack_overflow();
 
     panic!("Continued after stack overflow!");
+}
+
+#[panic_handler]
+fn panic(info: &PanicInfo) -> ! {
+    yonti_os::test_panic_handler(info)
 }

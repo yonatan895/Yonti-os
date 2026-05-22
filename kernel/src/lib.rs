@@ -7,6 +7,8 @@
 extern crate alloc;
 
 pub mod allocator;
+pub mod framebuffer;
+pub mod font;
 pub mod fs;
 pub mod gdt;
 pub mod interrupts;
@@ -18,9 +20,19 @@ pub mod sse;
 
 use core::panic::PanicInfo;
 
+use bootloader_api::config::{BootloaderConfig, Mapping};
+
+pub static BOOTLOADER_CONFIG: BootloaderConfig = {
+    let mut config = BootloaderConfig::new_default();
+    config.mappings.physical_memory = Some(Mapping::Dynamic);
+    config.kernel_stack_size = 20 * 4096;
+    config
+};
+
 pub fn init() {
     use x86_64::instructions;
-    gdt::init();
+    // Bootloader 0.11 already sets up GDT/TSS.
+    // Only SSE, IDT, and PIC need explicit init.
     unsafe { sse::init(); }
     interrupts::init_idt();
     unsafe { interrupts::PICS.lock().initialize() };
@@ -71,15 +83,19 @@ pub fn test_panic_handler(info: &PanicInfo) -> ! {
 }
 
 #[cfg(test)]
-use bootloader::{entry_point, BootInfo};
+use bootloader_api::{entry_point, BootInfo};
 
 #[cfg(test)]
-entry_point!(test_kernel_main);
+entry_point!(test_kernel_main, config = &BOOTLOADER_CONFIG);
 
-/// Entry point for `cargo test`
 #[cfg(test)]
-fn test_kernel_main(_boot_info: &'static BootInfo) -> ! {
+fn test_kernel_main(boot_info: &'static mut BootInfo) -> ! {
     init();
+    if let Some(fb) = boot_info.framebuffer.take() {
+        let info = fb.info();
+        let buffer = fb.into_buffer();
+        framebuffer::init(buffer, info);
+    }
     test_main();
     hlt_loop();
 }
