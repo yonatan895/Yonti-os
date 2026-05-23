@@ -19,8 +19,8 @@ rustup component add rust-src llvm-tools-preview --toolchain nightly
 cd kernel && cargo build --target x86_64-unknown-none   # compile kernel
 cd runner && cargo build --no-default-features           # build runner + test-runner
 cd runner && cargo run --bin runner -- bios              # run in QEMU
-./run_tests.sh                                           # all tests (11 tests, 2 boots)
-./run_tests.sh all                                       # unified test (10 tests, 1 boot)
+./run_tests.sh                                           # all tests (46 tests, 2 boots)
+./run_tests.sh all                                       # unified test (46 tests, 1 boot)
 ```
 
 ## Testing
@@ -29,7 +29,7 @@ Tests are unified into two QEMU boots:
 
 | Binary | Tests | Mechanism |
 |--------|-------|-----------|
-| `all_tests_elf` | 10 (basic_boot 1 + heap 4 + fs 5) | Single entry in `tests/all.rs`, shared init, `custom_test_frameworks` |
+| `all_tests_elf` | 46 (basic_boot 1, heap 7, fs 7, framebuffer 11, buddy 5, array_queue 3, apic 12) | Single entry in `tests/all.rs`, shared init, `custom_test_frameworks` |
 | `should_panic_elf` | 1 | Standalone, `harness=false`, expects kernel panic |
 
 `run_tests.sh` builds ELFs (Cargo), then `test-runner` wraps each → BIOS image → QEMU (`isa-debug-exit`: 33=pass, 35=fail).
@@ -47,7 +47,7 @@ PRs to `master` are gated by four jobs (PR-only, no duplicate on merge):
 | `fmt` | `cargo fmt --check` kernel + runner |
 | `clippy` | `cargo clippy -- -D warnings` both workspaces |
 | `deny` | `cargo deny check` both workspaces |
-| `build-and-test` | Full Cargo build + `./run_tests.sh` (11 tests) |
+| `build-and-test` | Full Cargo build + `./run_tests.sh` (46 tests) |
 
 Markdown-only PRs skip all CI checks — they require only a human review.
 
@@ -124,18 +124,22 @@ Yonti-os/                      # workspace root
 │   │   ├── allocator.rs       # global allocator (TLSF), Locked<A>, init_heap
 │   │   ├── allocator/
 │   │   │   ├── tlsf.rs        # TLSF O(1) heap (active, alignment support)
-│   │   │   ├── bump.rs, fixed_size_block.rs, linked_list.rs  # reference
+│   │   │   ├── bump.rs, linked_list.rs  # reference allocators
 │   │   ├── memory.rs          # OffsetPageTable init
 │   │   ├── memory/buddy.rs    # buddy frame allocator (MAX_ORDER=10)
 │   │   ├── uart.rs            # UART 16550 driver (replaces uart_16550 crate)
 │   │   ├── pic.rs             # 8259 PIC driver (replaces pic8259 crate)
 │   │   ├── serial.rs          # serial_print! macros
 │   │   ├── vga_buffer.rs      # println! / print! macros
-│   │   ├── framebuffer.rs     # pixel text renderer, 8x16 font
+│   │   ├── framebuffer.rs     # pixel text renderer, 8x16 font, Ctrl+/- scaling
 │   │   ├── font.rs            # bitmap font (96 glyphs, 1536 bytes)
 │   │   ├── gdt.rs             # GDT/TSS (bootloader provides)
-│   │   ├── interrupts.rs      # IDT, keyboard/timer/page fault handlers
+│   │   ├── interrupts.rs      # IDT, conditional APIC/PIC EOI dispatch
 │   │   ├── sse.rs             # SSE enablement
+│   │   ├── apic/mod.rs        # APIC subsystem: ACPI MADT parser, detection, init
+│   │   ├── apic/lapic.rs      # LAPIC MMIO driver (ID, version, SVR, EOI)
+│   │   ├── apic/ioapic.rs     # I/O APIC MMIO driver (indirect registers, redirection)
+│   │   ├── shell.rs           # async command shell
 │   │   ├── array_queue.rs     # lock-free SPSC queue (replaces crossbeam-queue)
 │   │   ├── async_utils.rs     # Stream, AtomicWaker (replaces futures-util)
 │   │   ├── once_cell.rs       # OnceCell (replaces conquer-once)
@@ -145,8 +149,9 @@ Yonti-os/                      # workspace root
 │   │   ├── fs/mod.rs          # FileSystem (global FS lazy_static)
 │   │   └── fs/inode.rs         # Inode, InodeKind (File | Directory)
 │   └── tests/
-│       ├── all.rs             # unified test entry (10 tests, 1 boot)
-│       ├── common/            # test function modules (basic_boot, heap, fs)
+│       ├── all.rs             # unified test entry (46 tests, 1 boot)
+│       ├── common/            # test function modules (apic, array_queue, basic_boot,
+│       │                      #   buddy_allocator, file_system, framebuffer, heap_allocation)
 │       ├── should_panic.rs    # standalone (harness=false)
 │       └── stack_overflow.rs  # standalone (harness=false, skipped)
 ├── runner/                    # standalone workspace (host target)
@@ -191,7 +196,7 @@ These replace external crates (32 → 15 in Cargo.lock):
 
 ## Dependency API gotchas
 
-- **`bootloader_api` 0.11.x**: `entry_point!` macro with `config = &BOOTLOADER_CONFIG`. `BootInfo` has `memory_regions`, `physical_memory_offset.into_option()`, `framebuffer.take()`.
+- **`bootloader_api` 0.11.x**: `entry_point!` macro with `config = &BOOTLOADER_CONFIG`. `BootInfo` has `memory_regions`, `physical_memory_offset.into_option()`, `framebuffer.take()`, `rsdp_addr.into_option()`.
 - **`x86_64` 0.15.4+**: `gdt.push()` is private → use `gdt.append()`. `idt.interrupts[index]` is private → use `idt[index]`.
 - **`spin` 0.9.x**: `spin::Mutex`, not `std::sync::Mutex`. Features: `spin_mutex`, `once`, `lock_api`.
 - **`linked_list_allocator` 0.10.x**: `Heap::init()` takes `*mut u8`, not `usize`.
@@ -203,6 +208,7 @@ If the kernel hangs or triple-faults silently, check:
 - Page table mappings — `init_heap` maps 257 pages at `0x4444_4444_0000`
 - TLSF sentinel page — the extra page at heap end must be mapped
 - Framebuffer init before first `println!` — before init it's a no-op
+- APIC init before PIC `mask_all()` — PIC must be masked only after APIC is fully configured
 - AtomicWaker race — `register()` and `take()` use `without_interrupts()` guard
 
 ## Commit conventions
