@@ -5,7 +5,7 @@ use crate::trace;
 use crate::{print, println};
 use alloc::string::String;
 use alloc::vec::Vec;
-use pc_keyboard::{DecodedKey, HandleControl, PS2Keyboard, ScancodeSet1, layouts};
+use pc_keyboard::{DecodedKey, HandleControl, KeyCode, PS2Keyboard, ScancodeSet1, layouts};
 
 pub struct Shell {
     buf: [u8; 256],
@@ -221,10 +221,31 @@ pub async fn shell_task() {
     shell.print_prompt();
 
     while let Some(scancode) = scancodes.next().await {
-        if let Ok(Some(key_event)) = keyboard.add_byte(scancode)
-            && let Some(key) = keyboard.process_keyevent(key_event)
-        {
-            shell.handle_key(key);
+        if let Ok(Some(key_event)) = keyboard.add_byte(scancode) {
+            let code = key_event.code;
+            let key = keyboard.process_keyevent(key_event);
+
+            let is_scale_up = matches!(code, KeyCode::OemPlus | KeyCode::NumpadAdd);
+            let is_scale_down = matches!(code, KeyCode::OemMinus | KeyCode::NumpadSubtract);
+
+            if let Some(key) = key {
+                if (is_scale_up || is_scale_down) && keyboard.get_modifiers().is_ctrl() {
+                    let changed = if is_scale_up {
+                        framebuffer::scale_up()
+                    } else {
+                        framebuffer::scale_down()
+                    };
+                    if changed {
+                        print!(
+                            "\x1b[33m[scale {}x]\x1b[0m\n",
+                            framebuffer::scale_factor().unwrap_or(1)
+                        );
+                        shell.print_prompt();
+                    }
+                } else {
+                    shell.handle_key(key);
+                }
+            }
         }
     }
 }

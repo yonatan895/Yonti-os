@@ -5,6 +5,8 @@ use spin::Mutex;
 use crate::font::{CHAR_HEIGHT, CHAR_WIDTH, FALLBACK_INDEX, FONT_BASIC, FONT_OFFSET};
 
 const CURSOR_HEIGHT: usize = 2;
+const MIN_SCALE: u8 = 1;
+const MAX_SCALE: u8 = 4;
 
 const ANSI_COLORS: [(u8, u8, u8); 8] = [
     (0, 0, 0),
@@ -32,6 +34,7 @@ pub struct FrameBufferWriter {
     y_pos: usize,
     fg: (u8, u8, u8),
     bg: (u8, u8, u8),
+    scale_factor: u8,
     escape_state: EscapeState,
     csi_buf: [u8; 8],
     csi_pos: usize,
@@ -47,11 +50,20 @@ impl FrameBufferWriter {
             y_pos: 0,
             fg: (170, 170, 170),
             bg: (0, 0, 0),
+            scale_factor: 1,
             escape_state: EscapeState::Normal,
             csi_buf: [0; 8],
             csi_pos: 0,
             cursor_shown: false,
         }
+    }
+
+    fn cell_width(&self) -> usize {
+        CHAR_WIDTH * self.scale_factor as usize
+    }
+
+    fn cell_height(&self) -> usize {
+        CHAR_HEIGHT * self.scale_factor as usize
     }
 
     fn write_pixel(&mut self, x: usize, y: usize, r: u8, g: u8, b: u8) {
@@ -88,14 +100,21 @@ impl FrameBufferWriter {
             FALLBACK_INDEX
         };
         let glyph_start = glyph_idx * CHAR_HEIGHT;
+        let s = self.scale_factor as usize;
 
         for row in 0..CHAR_HEIGHT {
             let glyph_byte = FONT_BASIC[glyph_start + row];
             for col in 0..CHAR_WIDTH {
-                if glyph_byte & (1 << (7 - col)) != 0 {
-                    self.write_pixel(x + col, y + row, self.fg.0, self.fg.1, self.fg.2);
+                let color = if glyph_byte & (1 << (7 - col)) != 0 {
+                    (self.fg.0, self.fg.1, self.fg.2)
                 } else {
-                    self.write_pixel(x + col, y + row, self.bg.0, self.bg.1, self.bg.2);
+                    (self.bg.0, self.bg.1, self.bg.2)
+                };
+                let (r, g, b) = color;
+                for sy in 0..s {
+                    for sx in 0..s {
+                        self.write_pixel(x + col * s + sx, y + row * s + sy, r, g, b);
+                    }
                 }
             }
         }
@@ -103,15 +122,17 @@ impl FrameBufferWriter {
 
     #[allow(dead_code)]
     fn clear_row(&mut self, y: usize) {
+        let ch = self.cell_height();
         let row_start = y * self.info.stride * self.info.bytes_per_pixel;
-        let row_end = (y + CHAR_HEIGHT) * self.info.stride * self.info.bytes_per_pixel;
+        let row_end = (y + ch) * self.info.stride * self.info.bytes_per_pixel;
         if row_end <= self.buffer.len() {
             self.buffer[row_start..row_end].fill(0);
         }
     }
 
     fn scroll_up(&mut self) {
-        let bytes_per_char_row = self.info.stride * self.info.bytes_per_pixel * CHAR_HEIGHT;
+        let ch = self.cell_height();
+        let bytes_per_char_row = self.info.stride * self.info.bytes_per_pixel * ch;
         let total_bytes = self.info.height * self.info.stride * self.info.bytes_per_pixel;
 
         if total_bytes <= bytes_per_char_row {
@@ -125,12 +146,13 @@ impl FrameBufferWriter {
     }
 
     fn new_line(&mut self) {
-        self.y_pos += CHAR_HEIGHT;
+        let ch = self.cell_height();
+        self.y_pos += ch;
         self.x_pos = 0;
 
-        if self.y_pos + CHAR_HEIGHT > self.info.height {
+        if self.y_pos + ch > self.info.height {
             self.scroll_up();
-            self.y_pos -= CHAR_HEIGHT;
+            self.y_pos -= ch;
         }
     }
 
@@ -162,9 +184,12 @@ impl FrameBufferWriter {
             return;
         }
         let (r, g, b) = self.bg;
-        let cursor_y = self.y_pos + CHAR_HEIGHT - CURSOR_HEIGHT;
-        for y in 0..CURSOR_HEIGHT {
-            for x in 0..CHAR_WIDTH {
+        let cw = self.cell_width();
+        let ch = self.cell_height();
+        let cursor_h = CURSOR_HEIGHT * self.scale_factor as usize;
+        let cursor_y = self.y_pos + ch - cursor_h;
+        for y in 0..cursor_h {
+            for x in 0..cw {
                 self.write_pixel(self.x_pos + x, cursor_y + y, r, g, b);
             }
         }
@@ -176,9 +201,12 @@ impl FrameBufferWriter {
             return;
         }
         let (r, g, b) = self.fg;
-        let cursor_y = self.y_pos + CHAR_HEIGHT - CURSOR_HEIGHT;
-        for y in 0..CURSOR_HEIGHT {
-            for x in 0..CHAR_WIDTH {
+        let cw = self.cell_width();
+        let ch = self.cell_height();
+        let cursor_h = CURSOR_HEIGHT * self.scale_factor as usize;
+        let cursor_y = self.y_pos + ch - cursor_h;
+        for y in 0..cursor_h {
+            for x in 0..cw {
                 self.write_pixel(self.x_pos + x, cursor_y + y, r, g, b);
             }
         }
@@ -187,31 +215,34 @@ impl FrameBufferWriter {
 
     pub fn write_byte(&mut self, byte: u8) {
         match self.escape_state {
-            EscapeState::Normal => match byte {
-                0x1b => self.escape_state = EscapeState::SawEsc,
-                b'\n' => {
-                    self.erase_cursor();
-                    self.new_line();
-                    self.draw_cursor();
-                }
-                0x08 => {
-                    self.erase_cursor();
-                    if self.x_pos >= CHAR_WIDTH {
-                        self.x_pos -= CHAR_WIDTH;
-                    }
-                    self.draw_cursor();
-                }
-                byte => {
-                    if self.x_pos + CHAR_WIDTH > self.info.width {
+            EscapeState::Normal => {
+                let cw = self.cell_width();
+                match byte {
+                    0x1b => self.escape_state = EscapeState::SawEsc,
+                    b'\n' => {
                         self.erase_cursor();
                         self.new_line();
+                        self.draw_cursor();
                     }
-                    self.draw_char(self.x_pos, self.y_pos, byte);
-                    self.cursor_shown = false;
-                    self.x_pos += CHAR_WIDTH;
-                    self.draw_cursor();
+                    0x08 => {
+                        self.erase_cursor();
+                        if self.x_pos >= cw {
+                            self.x_pos -= cw;
+                        }
+                        self.draw_cursor();
+                    }
+                    byte => {
+                        if self.x_pos + cw > self.info.width {
+                            self.erase_cursor();
+                            self.new_line();
+                        }
+                        self.draw_char(self.x_pos, self.y_pos, byte);
+                        self.cursor_shown = false;
+                        self.x_pos += cw;
+                        self.draw_cursor();
+                    }
                 }
-            },
+            }
             EscapeState::SawEsc => {
                 self.escape_state = if byte == b'[' {
                     EscapeState::SawBracket
@@ -308,6 +339,28 @@ impl FrameBufferWriter {
     pub fn bg_color(&self) -> (u8, u8, u8) {
         self.bg
     }
+
+    pub fn scale_factor(&self) -> u8 {
+        self.scale_factor
+    }
+
+    pub fn scale_up(&mut self) -> bool {
+        if self.scale_factor >= MAX_SCALE {
+            return false;
+        }
+        self.scale_factor += 1;
+        self.clear_screen();
+        true
+    }
+
+    pub fn scale_down(&mut self) -> bool {
+        if self.scale_factor <= MIN_SCALE {
+            return false;
+        }
+        self.scale_factor -= 1;
+        self.clear_screen();
+        true
+    }
 }
 
 impl fmt::Debug for FrameBufferWriter {
@@ -363,4 +416,16 @@ pub fn _print(args: fmt::Arguments) {
             writer.write_fmt(args).expect("Framebuffer write failed");
         }
     });
+}
+
+pub fn scale_up() -> bool {
+    with_framebuffer_mut(|fb| fb.scale_up()).unwrap_or(false)
+}
+
+pub fn scale_down() -> bool {
+    with_framebuffer_mut(|fb| fb.scale_down()).unwrap_or(false)
+}
+
+pub fn scale_factor() -> Option<u8> {
+    with_framebuffer(|fb| fb.scale_factor())
 }
