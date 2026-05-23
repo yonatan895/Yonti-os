@@ -57,11 +57,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install cargo-deny
-        run: |
-          URL=$(curl -sSfL https://api.github.com/repos/EmbarkStudios/cargo-deny/releases/latest | grep -oP '"browser_download_url": "\K[^"]*x86_64-unknown-linux-musl\.tar\.gz(?=")')
-          curl -sSfL "$URL" | tar xz --strip-components=1
-          sudo mv cargo-deny /usr/local/bin/
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
       - name: Check workspace dependencies
         run: cargo deny check
       - name: Check runner dependencies
