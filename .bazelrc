@@ -1,9 +1,0 @@
-# ── Nightly Rust ──
-build --@rules_rust//rust/toolchain/channel=nightly
-
-# ── Platform configs ──
-build:bare --platforms=//platforms:x86_64_bare_metal
-build:host --platforms=//platforms:x86_64_linux
-
-# ── Test output ──
-test --test_output=errors

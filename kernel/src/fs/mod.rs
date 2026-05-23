@@ -1,14 +1,14 @@
 /// In-memory filesystem providing hierarchical directories and files.
 ///
 /// All data is stored in heap-allocated `Vec<u8>` — no disk driver needed.
-/// Thread-safe via `spin::Mutex` around the global [`FS`] instance.
+/// Thread-safe via `spin::RwLock` around the global [`FS`] instance.
 ///
 /// # Example
 ///
 /// ```ignore
 /// use yonti_os::fs::FS;
 ///
-/// let mut fs = FS.lock();
+/// let mut fs = FS.write();
 /// fs.create_file("/hello.txt").unwrap();
 /// fs.write_file("/hello.txt", b"Hello!").unwrap();
 /// assert_eq!(fs.read_file("/hello.txt").unwrap(), b"Hello!");
@@ -18,7 +18,7 @@ pub mod inode;
 use alloc::string::String;
 use alloc::vec::Vec;
 use inode::{Inode, InodeKind};
-use spin::Mutex;
+use spin::RwLock;
 
 pub struct FileSystem {
     root: Inode,
@@ -165,5 +165,5 @@ fn split_path(path: &str) -> Vec<&str> {
 use lazy_static::lazy_static;
 
 lazy_static! {
-    pub static ref FS: Mutex<FileSystem> = Mutex::new(FileSystem::new());
+    pub static ref FS: RwLock<FileSystem> = RwLock::new(FileSystem::new());
 }

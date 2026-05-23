@@ -3,9 +3,7 @@
 # Usage: ./run_tests.sh [test_name]
 #   test_name: all, should_panic
 #
-# Supports both Cargo-built and Bazel-built ELFs.
-# In CI (CI=true): expects Cargo-built ELFs in target/
-# Locally: prefers Bazel ELFs in bazel-bin/, falls back to Cargo
+# Supports Cargo-built ELFs.
 
 set -euo pipefail
 
@@ -42,31 +40,12 @@ build_test_runner() {
 }
 
 build_all_elfs() {
-    if [ -n "${CI:-}" ]; then
-        # CI: use Cargo
-        say "Building test ELFs (cargo)..."
-        (cd "$KERNEL_DIR" && cargo build --tests --target "$TARGET")
-    else
-        # Local: try Bazel first
-        if command -v bazel &>/dev/null && bazel build --config=bare //kernel:all_tests_elf //kernel:should_panic_elf 2>/dev/null; then
-            say "Built test ELFs (bazel)"
-        else
-            say "Building test ELFs (cargo)..."
-            (cd "$KERNEL_DIR" && cargo build --tests --target "$TARGET")
-        fi
-    fi
+    say "Building test ELFs (cargo)..."
+    (cd "$KERNEL_DIR" && cargo build --tests --target "$TARGET")
 }
 
 find_elf() {
     local test_name="$1"
-    # Bazel-built ELFs
-    local bazel_name="${test_name}_tests_elf"
-    [ "$test_name" = "should_panic" ] && bazel_name="${test_name}_elf"
-    local bazel_path="$SCRIPT_DIR/bazel-bin/kernel/${bazel_name}"
-    if [ -f "$bazel_path" ]; then
-        echo "$bazel_path"
-        return
-    fi
     # Cargo-built ELFs
     ls -t "$TARGET_DIR/${test_name}-"* 2>/dev/null | grep -v '\.d$' | head -1
 }

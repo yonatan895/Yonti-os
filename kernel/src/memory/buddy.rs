@@ -258,12 +258,16 @@ impl BuddyAllocator {
         )))
     }
 
-    pub fn deallocate_frame_order(&mut self, frame: PhysFrame<Size4KiB>, mut order: usize) {
+    pub fn deallocate_frame_order(&mut self, frame: PhysFrame<Size4KiB>, order: usize) {
         if order > MAX_ORDER {
             return;
         }
 
+        self.allocated_count -= 1 << order;
+        monitor::dec_allocated_frames(1 << order);
+
         let mut idx = self.phys_to_idx(frame.start_address().as_u64());
+        let mut order = order;
 
         // Coalesce upward while buddy is free
         while order < MAX_ORDER {
@@ -281,8 +285,6 @@ impl BuddyAllocator {
         }
 
         self.insert_free(idx, order);
-        self.allocated_count -= 1 << order;
-        monitor::dec_allocated_frames(1 << order);
     }
 
     pub fn deallocate_frame(&mut self, frame: PhysFrame<Size4KiB>) {

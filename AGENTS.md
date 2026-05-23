@@ -32,7 +32,7 @@ Tests are unified into two QEMU boots:
 | `all_tests_elf` | 10 (basic_boot 1 + heap 4 + fs 5) | Single entry in `tests/all.rs`, shared init, `custom_test_frameworks` |
 | `should_panic_elf` | 1 | Standalone, `harness=false`, expects kernel panic |
 
-`run_tests.sh` builds ELFs (Bazel locally, Cargo in CI), then `test-runner` wraps each → BIOS image → QEMU (`isa-debug-exit`: 33=pass, 35=fail).
+`run_tests.sh` builds ELFs (Cargo), then `test-runner` wraps each → BIOS image → QEMU (`isa-debug-exit`: 33=pass, 35=fail).
 
 **Critical test quirk:** Tests using `custom_test_frameworks` and `reexport_test_harness_main` must use cargo's **default harness** (`harness = true`). Only `should_panic` and `stack_overflow` override this.
 
@@ -111,7 +111,6 @@ All changes must adhere to these principles:
 ```
 Yonti-os/                      # workspace root
 ├── Cargo.toml                 # workspace: members = ["kernel"]
-├── MODULE.bazel               # Bazel module (local dev only)
 ├── kernel/                    # workspace member (bare-metal kernel)
 │   ├── Cargo.toml             # bootloader_api 0.11, spin, x86_64, log, etc.
 │   ├── .cargo/config.toml     # build-std, target = "x86_64-unknown-none"

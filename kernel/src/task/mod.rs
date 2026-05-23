@@ -19,6 +19,7 @@ impl TaskId {
 pub struct Task {
     id: TaskId,
     future: Pin<Box<dyn Future<Output = ()>>>,
+    pub(crate) waker: Option<core::task::Waker>,
 }
 
 impl Task {
@@ -26,6 +27,7 @@ impl Task {
         Task {
             id: TaskId::new(),
             future: Box::pin(future),
+            waker: None,
         }
     }
 

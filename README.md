@@ -10,7 +10,6 @@ A bare-metal x86_64 operating system kernel written in Rust.
 
 Optional for local development:
 
-- **Bazel 7.4+** (via `bazelisk`) — hermetic builds
 - **cargo-deny** — license/security audit
 
 ## Setup
@@ -33,8 +32,7 @@ cd kernel && cargo build --target x86_64-unknown-none
 # Run in QEMU (BIOS mode)
 cd runner && cargo run --bin runner -- bios
 
-# Or via Bazel:
-bazel build --config=bare //kernel:yonti_os
+
 ```
 
 ## Test
@@ -48,7 +46,7 @@ bazel build --config=bare //kernel:yonti_os
 ./run_tests.sh should_panic
 ```
 
-`run_tests.sh` uses Cargo-built ELFs in CI and prefers Bazel-built ELFs locally (with Cargo fallback).
+
 
 ## Features
 
@@ -71,12 +69,12 @@ Hierarchical, heap-backed filesystem — no disk driver required.
 - Create, read, write, append files
 - Create directories, list contents, check existence
 - Nested path resolution (`/home/user/file.txt`)
-- Thread-safe via `spin::Mutex`
+- Thread-safe via `spin::RwLock`
 
 ```rust
 use yonti_os::fs::FS;
 
-let mut fs = FS.lock();
+let mut fs = FS.write();
 fs.create_file("/hello.txt").unwrap();
 fs.write_file("/hello.txt", b"Hello, world!").unwrap();
 assert_eq!(fs.read_file("/hello.txt").unwrap(), b"Hello, world!");

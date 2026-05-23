@@ -2,15 +2,21 @@ pub mod buddy;
 
 use x86_64::registers::control::Cr3;
 use x86_64::{
-    PhysAddr, VirtAddr,
+    VirtAddr,
+    structures::paging::{OffsetPageTable, PageTable},
+};
+
+#[cfg(test)]
+use x86_64::{
+    PhysAddr,
     structures::paging::{
-        FrameAllocator, Mapper, OffsetPageTable, Page, PageTable, PageTableFlags as Flags,
-        PhysFrame, Size4KiB,
+        FrameAllocator, Mapper, Page, PageTableFlags as Flags, PhysFrame, Size4KiB,
     },
 };
 
 pub struct EmptyFrameAllocator;
 
+#[cfg(test)]
 pub fn create_example_mapping(
     page: Page,
     mapper: &mut OffsetPageTable,
