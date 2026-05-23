@@ -99,16 +99,26 @@ impl TlsfAllocator {
         self.insert(node, heap_size);
     }
 
-    pub fn malloc(&mut self, size: usize) -> *mut u8 {
-        let needed = (size + HEADER_SIZE).max(MIN_BLOCK_SIZE);
+    /// Allocate a block of at least `size` bytes with the given alignment.
+    /// `align` must be a power of two.
+    pub fn malloc(&mut self, size: usize, align: usize) -> *mut u8 {
+        let align = align.max(HEADER_SIZE);
+
+        // The header is 8 bytes. After alignment padding, the user pointer
+        // may be shifted forward. The worst case is we waste `align - 1` bytes
+        // before the user data. We need a block large enough for:
+        //   header + max_alignment_pad + size
+        let worst_padding = align.saturating_sub(HEADER_SIZE);
+        let needed = (HEADER_SIZE + worst_padding + size).max(MIN_BLOCK_SIZE);
+
         let (fli, sl) = Self::mapping(needed);
         let fli = fli.min(FL_COUNT - 1);
 
-        let block = match self.find(fli, sl) {
+        let block = match self.find_block(fli, sl, needed) {
             Some(b) => b,
             None => return core::ptr::null_mut(),
         };
-        self.alloc_from(block, needed)
+        self.alloc_from(block, size, align)
     }
 
     /// # Safety
@@ -163,12 +173,27 @@ impl TlsfAllocator {
         )
     }
 
-    fn find(&mut self, fli: usize, sl: usize) -> Option<NonNull<BlockHeader>> {
+    /// Find a free block that satisfies the given size class, iterating
+    /// through coarser buckets if the exact bucket has an undersized block.
+    fn find_block(&mut self, fli: usize, sl: usize, needed: usize) -> Option<NonNull<BlockHeader>> {
+        // Try all SL buckets from `sl` upward in this FL
         let sl_map = self.sl_bitmaps[fli] & (!0u32 << sl);
         if sl_map != 0 {
-            let sl2 = sl_map.trailing_zeros() as usize;
-            return Some(self.pop(fli, sl2));
+            let start = sl_map.trailing_zeros() as usize;
+            for sl2 in start..SL_COUNT {
+                if self.sl_bitmaps[fli] & (1u32 << sl2) != 0 {
+                    // Peek at the head block — verify it's large enough
+                    if let Some(b) = self.free_lists[fli][sl2] {
+                        let size = unsafe { (*b.as_ptr()).size() };
+                        if size >= needed {
+                            return Some(self.pop(fli, sl2));
+                        }
+                    }
+                }
+            }
         }
+
+        // Search higher FLs
         let fl_map = self.fl_bitmap & (!0u32 << (fli + 1));
         if fl_map != 0 {
             let fl2 = fl_map.trailing_zeros() as usize;
@@ -178,20 +203,50 @@ impl TlsfAllocator {
         None
     }
 
-    fn alloc_from(&mut self, block: NonNull<BlockHeader>, needed: usize) -> *mut u8 {
+    fn alloc_from(
+        &mut self,
+        block: NonNull<BlockHeader>,
+        user_size: usize,
+        align: usize,
+    ) -> *mut u8 {
         let header = block.as_ptr();
         let block_size = unsafe { (*header).size() };
         let block_addr = header as usize;
 
-        if block_size >= needed + MIN_BLOCK_SIZE {
-            // split remainder
-            let rem_addr = block_addr + needed;
-            let rem_size = block_size - needed;
+        // Compute the aligned user-data pointer within this block.
+        // User data starts at `header + HEADER_SIZE`, but may need
+        // front-padding to satisfy the alignment requirement.
+        let user_start = block_addr + HEADER_SIZE;
+        let aligned_start = align_up(user_start, align);
+        let front_padding = aligned_start - user_start;
+
+        // Total block size needed: header + front_padding + user_size
+        let total_consumed = HEADER_SIZE + front_padding + user_size;
+
+        // Verify the block is large enough (defense against TLSF bucket imprecision)
+        if block_size < total_consumed {
+            // Block too small — insert it back and return null.
+            // This should not happen because find_block verified size >= needed,
+            // but `needed` includes worst-case padding. If the actual alignment
+            // padding makes the block too small, we can't satisfy this request.
             unsafe {
-                (*header).set(needed, false, (*header).prev_is_free());
+                (*header).set(block_size, true, (*header).prev_is_free());
+            }
+            self.insert(block, block_size);
+            return core::ptr::null_mut();
+        }
+
+        let effective_total = total_consumed;
+
+        if block_size >= effective_total + MIN_BLOCK_SIZE {
+            // Split remainder after the allocation
+            let rem_addr = block_addr + effective_total;
+            let rem_size = block_size - effective_total;
+            unsafe {
+                (*header).set(effective_total, false, (*header).prev_is_free());
 
                 let rem = rem_addr as *mut BlockHeader;
-                (*rem).prev_phys_size = needed as u32;
+                (*rem).prev_phys_size = effective_total as u32;
                 (*rem).set(rem_size, true, false);
 
                 let next = (rem_addr + rem_size) as *mut BlockHeader;
@@ -207,7 +262,17 @@ impl TlsfAllocator {
                 (*next).mark_prev_free(false);
             }
         }
-        unsafe { (header.add(1)) as *mut u8 }
+
+        // If we needed front-padding, split it off as a free block
+        if front_padding > 0 {
+            // The front_padding region (after header, before aligned_start) is wasted.
+            // We already accounted for it in `effective_total`, so the allocation
+            // starts at block_addr and includes the padding. The user pointer is
+            // aligned_start. The padding is not separately freed — it's part of
+            // this allocation's overhead.
+        }
+
+        aligned_start as *mut u8
     }
 
     fn insert(&mut self, block: NonNull<BlockHeader>, size: usize) {
@@ -266,4 +331,8 @@ impl TlsfAllocator {
             }
         }
     }
+}
+
+fn align_up(addr: usize, align: usize) -> usize {
+    (addr + align - 1) & !(align - 1)
 }

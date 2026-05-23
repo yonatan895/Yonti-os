@@ -34,7 +34,7 @@ impl<A> Locked<A> {
 unsafe impl GlobalAlloc for Locked<TlsfAllocator> {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         let mut tlsf = self.lock();
-        let ptr = tlsf.malloc(layout.size());
+        let ptr = tlsf.malloc(layout.size(), layout.align());
         if !ptr.is_null() {
             monitor::inc_alloc(layout.size());
             crate::trace_event!(TraceEventId::Alloc, layout.size(), ptr as u64);
