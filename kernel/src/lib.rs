@@ -7,6 +7,7 @@
 extern crate alloc;
 
 pub mod allocator;
+pub mod async_utils;
 pub mod font;
 pub mod framebuffer;
 pub mod fs;

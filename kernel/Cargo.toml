@@ -32,11 +32,6 @@ features = ["alloc"]
 version = "0.3.2"
 default-features = false
 
-[dependencies.futures-util]
-version = "0.3.4"
-default-features = false
-features = ["alloc"]
-
 [package.metadata.bootloader_api]
 # Enable identity mapping of physical memory (replaces features = ["map_physical_memory"])
 mappings.physical_memory.in_use = true

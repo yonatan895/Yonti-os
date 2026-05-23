@@ -1,3 +1,4 @@
+use crate::async_utils::{AtomicWaker, Stream, StreamExt};
 use crate::{print, println};
 use conquer_once::spin::OnceCell;
 use core::{
@@ -5,8 +6,6 @@ use core::{
     task::{Context, Poll},
 };
 use crossbeam_queue::ArrayQueue;
-use futures_util::stream::{Stream, StreamExt};
-use futures_util::task::AtomicWaker;
 use pc_keyboard::{layouts, DecodedKey, HandleControl, Keyboard, ScancodeSet1};
 
 static WAKER: AtomicWaker = AtomicWaker::new();
