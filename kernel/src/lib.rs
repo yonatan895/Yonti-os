@@ -7,15 +7,20 @@
 extern crate alloc;
 
 pub mod allocator;
+pub mod array_queue;
+pub mod async_utils;
 pub mod font;
 pub mod framebuffer;
 pub mod fs;
 pub mod gdt;
 pub mod interrupts;
 pub mod memory;
+pub mod once_cell;
+pub mod pic;
 pub mod serial;
 pub mod sse;
 pub mod task;
+pub mod uart;
 pub mod vga_buffer;
 
 use core::panic::PanicInfo;

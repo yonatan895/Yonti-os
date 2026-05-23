@@ -1,12 +1,11 @@
+use crate::array_queue::{ArrayQueue, PopError};
+use crate::async_utils::{AtomicWaker, Stream, StreamExt};
+use crate::once_cell::OnceCell;
 use crate::{print, println};
-use conquer_once::spin::OnceCell;
 use core::{
     pin::Pin,
     task::{Context, Poll},
 };
-use crossbeam_queue::ArrayQueue;
-use futures_util::stream::{Stream, StreamExt};
-use futures_util::task::AtomicWaker;
 use pc_keyboard::{layouts, DecodedKey, HandleControl, Keyboard, ScancodeSet1};
 
 static WAKER: AtomicWaker = AtomicWaker::new();
@@ -81,7 +80,7 @@ impl Stream for ScancodeStream {
                 WAKER.take();
                 Poll::Ready(Some(scancode))
             }
-            Err(crossbeam_queue::PopError) => Poll::Pending,
+            Err(PopError) => Poll::Pending,
         }
     }
 }

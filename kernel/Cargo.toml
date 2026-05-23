@@ -14,31 +14,14 @@ harness = false
 
 [dependencies]
 bootloader_api = "0.11.15"
-volatile = "0.2.6"
-spin = "0.5.2"
+spin = { version = "0.9.8", default-features = false, features = ["spin_mutex", "once", "lock_api"] }
 x86_64 = "0.15.2"
-uart_16550 = "0.2.0"
-pic8259 = "0.10.1"
 pc-keyboard = "0.5.0"
 linked_list_allocator = "0.10.2"
 
 [dependencies.lazy_static]
 version = "1.0"
 features = ["spin_no_std"]
-
-[dependencies.crossbeam-queue]
-version = "0.2.1"
-default-features = false
-features = ["alloc"]
-
-[dependencies.conquer-once]
-version = "0.3.2"
-default-features = false
-
-[dependencies.futures-util]
-version = "0.3.4"
-default-features = false
-features = ["alloc"]
 
 [package.metadata.bootloader_api]
 # Enable identity mapping of physical memory (replaces features = ["map_physical_memory"])
