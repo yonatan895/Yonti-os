@@ -1,4 +1,6 @@
+use crate::monitor;
 use crate::pic::ChainedPics;
+use crate::trace::TraceEventId;
 use crate::{gdt, hlt_loop, print, println};
 use lazy_static::lazy_static;
 use pc_keyboard::{layouts, HandleControl, Keyboard, ScancodeSet1};
@@ -59,6 +61,7 @@ extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStac
     let mut port = Port::new(0x60);
 
     let scancode: u8 = unsafe { port.read() };
+    monitor::inc_interrupt(InterruptIndex::Keyboard.as_u8());
     crate::task::keyboard::add_scancode(scancode);
 
     unsafe {
@@ -69,6 +72,12 @@ extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStac
 
 extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFrame) {
     print!(".");
+    monitor::inc_interrupt(InterruptIndex::Timer.as_u8());
+    monitor::inc_timer_tick();
+    crate::trace_event!(
+        TraceEventId::Interrupt,
+        InterruptIndex::Timer.as_u8() as u64
+    );
 
     unsafe {
         PICS.lock()

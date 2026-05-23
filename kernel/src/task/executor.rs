@@ -1,5 +1,6 @@
 use super::{Task, TaskId};
 use crate::array_queue::ArrayQueue;
+use crate::monitor;
 use alloc::task::Wake;
 use alloc::{collections::BTreeMap, sync::Arc};
 use core::task::{Context, Poll, Waker};
@@ -25,6 +26,7 @@ impl Executor {
             panic!("task with same ID already in tasks");
         }
         self.task_queue.push(task_id).expect("queue full");
+        monitor::inc_task_spawned();
     }
 
     fn run_ready_tasks(&mut self) {
@@ -49,6 +51,7 @@ impl Executor {
                     // task done -> remove it and its cached waker
                     tasks.remove(&task_id);
                     waker_cache.remove(&task_id);
+                    monitor::inc_task_completed();
                 }
                 Poll::Pending => {}
             }

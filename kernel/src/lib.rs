@@ -10,6 +10,7 @@ extern crate alloc;
 pub mod allocator;
 pub mod array_queue;
 pub mod async_utils;
+pub mod debug;
 pub mod font;
 pub mod framebuffer;
 pub mod fs;
@@ -17,11 +18,13 @@ pub mod gdt;
 pub mod interrupts;
 pub mod log;
 pub mod memory;
+pub mod monitor;
 pub mod once_cell;
 pub mod pic;
 pub mod serial;
 pub mod sse;
 pub mod task;
+pub mod trace;
 pub mod uart;
 pub mod vga_buffer;
 
@@ -87,6 +90,11 @@ pub fn test_runner(tests: &[&dyn Testable]) {
 pub fn test_panic_handler(info: &PanicInfo) -> ! {
     serial_println!("[failed]\n");
     serial_println!("Error: {}\n", info);
+    crate::debug::crash_dump(
+        &alloc::format!("{}", info),
+        info.location().map_or("?", |l| l.file()),
+        info.location().map_or(0, |l| l.line()),
+    );
     exit_qemu(QemuExitCode::Failed);
     hlt_loop();
 }
