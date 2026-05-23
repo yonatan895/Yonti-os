@@ -53,15 +53,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Install cargo-deny
+        run: |
+          curl -sSL https://github.com/EmbarkStudios/cargo-deny/releases/latest/download/cargo-deny-x86_64-unknown-linux-gnu.tar.gz | tar xz
+          sudo mv cargo-deny /usr/local/bin/
       - name: Check workspace dependencies
-        uses: EmbarkStudios/cargo-deny-action@v2
-        with:
-          command: check
+        run: cargo deny check
       - name: Check runner dependencies
-        uses: EmbarkStudios/cargo-deny-action@v2
-        with:
-          command: check
-          arguments: --manifest-path runner/Cargo.toml --config deny.toml
+        run: cd runner && cargo deny check
 
   build-and-test:
     name: "build + test"
