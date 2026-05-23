@@ -1,9 +1,11 @@
 //! Buddy physical frame allocator.
 //!
 //! Manages physical pages in power-of-two blocks (order 0 = 4 KiB up to
-//! order 10 = 4 MiB). Free blocks are tracked via a singly-linked list
+//! order 10 = 4 MiB). Free blocks are tracked via a doubly-linked list
 //! threaded through the free pages themselves (zero overhead when allocated).
-//! A dense bitmap tracks which frames are free vs. allocated.
+//! Two `usize` slots in each free block store `next` and `prev` indices,
+//! making removal O(1). A dense bitmap tracks which frames are free vs.
+//! allocated.
 
 use bootloader_api::info::{MemoryRegionKind, MemoryRegions};
 use x86_64::PhysAddr;
@@ -169,47 +171,56 @@ impl BuddyAllocator {
         self.mark_range_free(idx, 1 << order);
 
         let header = self.frame_idx_to_ptr(idx);
-        // Thread the free list through the first page of the block
+        let old_head = self.free_lists[order];
         unsafe {
-            *(header as *mut usize) = self.free_lists[order].unwrap_or(NULL_LINK);
+            *(header as *mut usize) = old_head.unwrap_or(NULL_LINK); // next
+            *((header as *mut usize).add(1)) = NULL_LINK; // prev (head)
+        }
+        if let Some(old) = old_head {
+            let old_header = self.frame_idx_to_ptr(old);
+            unsafe {
+                *((old_header as *mut usize).add(1)) = idx; // old head's prev
+            }
         }
         self.free_lists[order] = Some(idx);
     }
 
     fn pop_free(&mut self, order: usize) -> Option<usize> {
         let idx = self.free_lists[order]?;
-        let next = unsafe { *(self.frame_idx_to_ptr(idx) as *const usize) };
+        let header = self.frame_idx_to_ptr(idx);
+        let next = unsafe { *(header as *const usize) };
+        if next != NULL_LINK {
+            let next_header = self.frame_idx_to_ptr(next);
+            unsafe {
+                *((next_header as *mut usize).add(1)) = NULL_LINK; // new head prev
+            }
+        }
         self.free_lists[order] = if next == NULL_LINK { None } else { Some(next) };
         self.mark_range_allocated(idx, 1 << order);
         Some(idx)
     }
 
     fn remove_free(&mut self, idx: usize, order: usize) {
-        // Walk free list for this order, remove matching entry
-        let mut prev: Option<usize> = None;
-        let mut current = self.free_lists[order];
-
-        while let Some(cur_idx) = current {
-            if cur_idx == idx {
-                let next = unsafe { *(self.frame_idx_to_ptr(cur_idx) as *const usize) };
-                let next = if next == NULL_LINK { None } else { Some(next) };
-                match prev {
-                    Some(p) => unsafe {
-                        *(self.frame_idx_to_ptr(p) as *mut usize) = next.unwrap_or(NULL_LINK);
-                    },
-                    None => {
-                        self.free_lists[order] = next;
-                    }
-                }
-                return;
+        let header = self.frame_idx_to_ptr(idx);
+        let (next, prev) = unsafe {
+            (
+                *(header as *const usize),
+                *((header as *const usize).add(1)),
+            )
+        };
+        if prev != NULL_LINK {
+            let prev_header = self.frame_idx_to_ptr(prev);
+            unsafe {
+                *(prev_header as *mut usize) = next;
             }
-            prev = current;
-            let raw_next = unsafe { *(self.frame_idx_to_ptr(cur_idx) as *const usize) };
-            current = if raw_next == NULL_LINK {
-                None
-            } else {
-                Some(raw_next)
-            };
+        } else {
+            self.free_lists[order] = if next == NULL_LINK { None } else { Some(next) };
+        }
+        if next != NULL_LINK {
+            let next_header = self.frame_idx_to_ptr(next);
+            unsafe {
+                *((next_header as *mut usize).add(1)) = prev;
+            }
         }
     }
 

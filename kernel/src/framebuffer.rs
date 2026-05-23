@@ -4,11 +4,35 @@ use spin::Mutex;
 
 use crate::font::{CHAR_HEIGHT, CHAR_WIDTH, FALLBACK_INDEX, FONT_BASIC, FONT_OFFSET};
 
+const ANSI_COLORS: [(u8, u8, u8); 8] = [
+    (0, 0, 0),
+    (170, 0, 0),
+    (0, 170, 0),
+    (170, 85, 0),
+    (0, 0, 170),
+    (170, 0, 170),
+    (0, 170, 170),
+    (170, 170, 170),
+];
+
+#[derive(Clone, Copy, PartialEq)]
+enum EscapeState {
+    Normal,
+    SawEsc,
+    SawBracket,
+    InCsi,
+}
+
 pub struct FrameBufferWriter {
     buffer: &'static mut [u8],
     info: FrameBufferInfo,
     x_pos: usize,
     y_pos: usize,
+    fg: (u8, u8, u8),
+    bg: (u8, u8, u8),
+    escape_state: EscapeState,
+    csi_buf: [u8; 8],
+    csi_pos: usize,
 }
 
 impl FrameBufferWriter {
@@ -18,6 +42,11 @@ impl FrameBufferWriter {
             info,
             x_pos: 0,
             y_pos: 0,
+            fg: (170, 170, 170),
+            bg: (0, 0, 0),
+            escape_state: EscapeState::Normal,
+            csi_buf: [0; 8],
+            csi_pos: 0,
         }
     }
 
@@ -60,9 +89,9 @@ impl FrameBufferWriter {
             let glyph_byte = FONT_BASIC[glyph_start + row];
             for col in 0..CHAR_WIDTH {
                 if glyph_byte & (1 << (7 - col)) != 0 {
-                    self.write_pixel(x + col, y + row, 255, 255, 255);
+                    self.write_pixel(x + col, y + row, self.fg.0, self.fg.1, self.fg.2);
                 } else {
-                    self.write_pixel(x + col, y + row, 0, 0, 0);
+                    self.write_pixel(x + col, y + row, self.bg.0, self.bg.1, self.bg.2);
                 }
             }
         }
@@ -101,15 +130,68 @@ impl FrameBufferWriter {
         }
     }
 
+    fn apply_sgr(&mut self) {
+        let buf = core::str::from_utf8(&self.csi_buf[..self.csi_pos]).unwrap_or("");
+        let param: u32 = buf
+            .split(';')
+            .next()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0);
+
+        match param {
+            0 => {
+                self.fg = (170, 170, 170);
+                self.bg = (0, 0, 0);
+            }
+            30..=37 => {
+                self.fg = ANSI_COLORS[(param - 30) as usize];
+            }
+            40..=47 => {
+                self.bg = ANSI_COLORS[(param - 40) as usize];
+            }
+            _ => {}
+        }
+    }
+
     pub fn write_byte(&mut self, byte: u8) {
-        match byte {
-            b'\n' => self.new_line(),
-            byte => {
-                if self.x_pos + CHAR_WIDTH > self.info.width {
-                    self.new_line();
+        match self.escape_state {
+            EscapeState::Normal => match byte {
+                0x1b => self.escape_state = EscapeState::SawEsc,
+                b'\n' => self.new_line(),
+                byte => {
+                    if self.x_pos + CHAR_WIDTH > self.info.width {
+                        self.new_line();
+                    }
+                    self.draw_char(self.x_pos, self.y_pos, byte);
+                    self.x_pos += CHAR_WIDTH;
                 }
-                self.draw_char(self.x_pos, self.y_pos, byte);
-                self.x_pos += CHAR_WIDTH;
+            },
+            EscapeState::SawEsc => {
+                self.escape_state = if byte == b'[' {
+                    EscapeState::SawBracket
+                } else {
+                    EscapeState::Normal
+                };
+            }
+            EscapeState::SawBracket => {
+                if byte.is_ascii_digit() || byte == b';' {
+                    self.escape_state = EscapeState::InCsi;
+                    self.csi_buf[0] = byte;
+                    self.csi_pos = 1;
+                } else {
+                    self.escape_state = EscapeState::Normal;
+                }
+            }
+            EscapeState::InCsi => {
+                if (byte.is_ascii_digit() || byte == b';') && self.csi_pos < self.csi_buf.len() {
+                    self.csi_buf[self.csi_pos] = byte;
+                    self.csi_pos += 1;
+                } else if byte == b'm' {
+                    self.apply_sgr();
+                    self.escape_state = EscapeState::Normal;
+                } else {
+                    self.escape_state = EscapeState::Normal;
+                }
             }
         }
     }
@@ -117,10 +199,64 @@ impl FrameBufferWriter {
     pub fn write_string(&mut self, s: &str) {
         for byte in s.bytes() {
             match byte {
-                0x20..=0x7e | b'\n' => self.write_byte(byte),
+                0x20..=0x7e | b'\n' | 0x1b => self.write_byte(byte),
                 _ => self.write_byte(0xfe),
             }
         }
+    }
+
+    pub fn read_pixel(&self, x: usize, y: usize) -> Option<(u8, u8, u8)> {
+        if x >= self.info.width || y >= self.info.height {
+            return None;
+        }
+        let offset = (y * self.info.stride + x) * self.info.bytes_per_pixel;
+        if offset + 2 >= self.buffer.len() {
+            return None;
+        }
+        match self.info.pixel_format {
+            PixelFormat::Rgb => Some((
+                self.buffer[offset],
+                self.buffer[offset + 1],
+                self.buffer[offset + 2],
+            )),
+            PixelFormat::Bgr => Some((
+                self.buffer[offset + 2],
+                self.buffer[offset + 1],
+                self.buffer[offset],
+            )),
+            _ => Some((
+                self.buffer[offset],
+                self.buffer[offset + 1],
+                self.buffer[offset + 2],
+            )),
+        }
+    }
+
+    pub fn cursor_position(&self) -> (usize, usize) {
+        (self.x_pos, self.y_pos)
+    }
+
+    pub fn dimensions(&self) -> (usize, usize) {
+        (self.info.width, self.info.height)
+    }
+
+    pub fn clear_screen(&mut self) {
+        self.buffer.fill(0);
+        self.x_pos = 0;
+        self.y_pos = 0;
+    }
+
+    pub fn set_cursor(&mut self, x: usize, y: usize) {
+        self.x_pos = x;
+        self.y_pos = y;
+    }
+
+    pub fn fg_color(&self) -> (u8, u8, u8) {
+        self.fg
+    }
+
+    pub fn bg_color(&self) -> (u8, u8, u8) {
+        self.bg
     }
 }
 
@@ -149,6 +285,22 @@ static FRAMEBUFFER: Mutex<Option<FrameBufferWriter>> = Mutex::new(None);
 pub fn init(buffer: &'static mut [u8], info: FrameBufferInfo) {
     let writer = FrameBufferWriter::new(buffer, info);
     *FRAMEBUFFER.lock() = Some(writer);
+}
+
+pub fn with_framebuffer<F, R>(f: F) -> Option<R>
+where
+    F: FnOnce(&FrameBufferWriter) -> R,
+{
+    use x86_64::instructions::interrupts;
+    interrupts::without_interrupts(|| FRAMEBUFFER.lock().as_ref().map(f))
+}
+
+pub fn with_framebuffer_mut<F, R>(f: F) -> Option<R>
+where
+    F: FnOnce(&mut FrameBufferWriter) -> R,
+{
+    use x86_64::instructions::interrupts;
+    interrupts::without_interrupts(|| FRAMEBUFFER.lock().as_mut().map(f))
 }
 
 pub fn _print(args: fmt::Arguments) {
