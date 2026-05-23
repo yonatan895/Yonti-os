@@ -40,8 +40,9 @@ jobs:
             ~/.cargo/registry/
             ~/.cargo/git/
             target/
-          key: clippy-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: clippy-${{ runner.os }}-
+            runner/target/
+          key: cargo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: cargo-${{ runner.os }}-
       - name: Cargo clippy (kernel)
         run: |
           cargo build --target x86_64-unknown-none
@@ -83,8 +84,8 @@ jobs:
             ~/.cargo/git/
             target/
             runner/target/
-          key: build-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: build-${{ runner.os }}-
+          key: cargo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: cargo-${{ runner.os }}-
       - name: Install QEMU
         run: |
           sudo apt-get update -q
