@@ -1,5 +1,4 @@
 pub mod bump;
-pub mod fixed_size_block;
 pub mod linked_list;
 pub mod tlsf;
 
@@ -101,6 +100,7 @@ pub fn init_heap(
 /// Align the given address `addr` upwards to alignment `align`.
 ///
 /// Requires that `align` is a power of two.
-fn align_up(addr: usize, align: usize) -> usize {
+pub(crate) fn align_up(addr: usize, align: usize) -> usize {
+    debug_assert!(align.is_power_of_two(), "align must be a power of two");
     (addr + align - 1) & !(align - 1)
 }

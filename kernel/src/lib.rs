@@ -5,6 +5,7 @@
 #![reexport_test_harness_main = "test_main"]
 #![feature(abi_x86_interrupt)]
 #![allow(unexpected_cfgs)]
+#![feature(sync_unsafe_cell)]
 extern crate alloc;
 
 pub mod allocator;

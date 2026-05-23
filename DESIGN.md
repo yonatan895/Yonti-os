@@ -14,7 +14,7 @@ Yonti-os/
 │   │   ├── lib.rs           # Crate root, init(), test framework, QEMU exit
 │   │   ├── main.rs          # kernel_main: boot, heap, FS demo, executor
 │   │   ├── allocator.rs     # Global allocator (TLSF), Locked<A>
-│   │   ├── allocator/       # tlsf.rs, bump.rs, fixed_size_block.rs, linked_list.rs
+│   │   ├── allocator/       # tlsf.rs, bump.rs, linked_list.rs
 │   │   ├── memory.rs        # OffsetPageTable init, EmptyFrameAllocator
 │   │   ├── memory/buddy.rs  # Buddy physical frame allocator
 │   │   ├── uart.rs          # UART 16550 driver (replaces uart_16550 crate)
@@ -70,8 +70,8 @@ Two separate Cargo workspaces:
 | Kernel | `kernel/` | `x86_64-unknown-none` | `build-std = ["core", "compiler_builtins", "alloc"]`, `panic = "abort"` |
 | Runner | `runner/` | `x86_64-unknown-linux-gnu` | `[workspace]` (separate), `--no-default-features` in CI |
 
-**Kernel dependencies** (15 crates in lock file):
-`bootloader_api` 0.11, `x86_64` 0.15, `spin` 0.9 (`spin_mutex`, `once`, `lock_api`), `lazy_static` 1.0 (`spin_no_std`), `pc-keyboard` 0.5, `linked_list_allocator` 0.10, `log` 0.4 (no_std, info max).
+**Kernel dependencies** (14 crates in lock file):
+`bootloader_api` 0.11, `x86_64` 0.15, `spin` 0.9 (`spin_mutex`, `once`, `lock_api`), `lazy_static` 1.0 (`spin_no_std`), `pc-keyboard` 0.5, `log` 0.4 (no_std, info max).
 
 **Runner dependencies** (30–110 crates):
 `bootloader` 0.11 (build + runtime), `ovmf-prebuilt` 0.2 (optional, `uefi` feature). Feature-gated: `--no-default-features` in CI drops ~80 transitive crates.
@@ -88,8 +88,8 @@ Two separate Cargo workspaces:
 |--------|-----|---------|
 | `lib.rs` | 130 | Crate root, `BOOTLOADER_CONFIG`, `init()` (SSE/IDT/PIC), test framework, QEMU exit |
 | `main.rs` | 105 | `kernel_main`: boot sequence, FS demo, executor spawn |
-| `gdt.rs` | 54 | GDT/TSS setup (bootloader 0.11 provides by default) |
-| `interrupts.rs` | 114 | IDT, keyboard/timer/page-fault handlers, PIC EOI |
+| `gdt.rs` | 54 | GDT/TSS + double-fault IST stack via `SyncUnsafeCell` |
+| `interrupts.rs` | 114 | IDT, keyboard/timer/page-fault handlers; page fault triggers crash dump via `panic!` |
 | `sse.rs` | 23 | SSE enablement via CR0/CR4 registers |
 
 ### Memory Management (6)
@@ -99,28 +99,27 @@ Two separate Cargo workspaces:
 | `memory.rs` | 49 | `OffsetPageTable` init, `EmptyFrameAllocator` |
 | `memory/buddy.rs` | 299 | Buddy frame allocator (4 KiB–4 MiB, bitmap, deallocation) |
 | `allocator.rs` | 104 | `#[global_allocator]`, `Locked<A>`, `init_heap()` |
-| `allocator/tlsf.rs` | 338 | TLSF heap (O(1), 19×32 classes, coalescing, alignment support) |
+| `allocator/tlsf.rs` | 338 | TLSF heap (O(1), 19×32 classes, coalescing, alignment), `debug_assert!` guards against 4 GiB truncation |
 | `allocator/bump.rs` | 64 | Bump allocator (reference) |
-| `allocator/fixed_size_block.rs` | 103 | Fixed-size block allocator (reference) |
 | `allocator/linked_list.rs` | 148 | Linked-list allocator (reference) |
 
 ### I/O & Display (6)
 
 | Module | LOC | Purpose |
 |--------|-----|---------|
-| `uart.rs` | 107 | UART 16550 driver (replaces `uart_16550` crate) |
+| `uart.rs` | 107 | UART 16550 driver, bounded `wait_for!` spin loop (100K retries) |
 | `pic.rs` | 114 | 8259 PIC driver (replaces `pic8259` crate) |
 | `serial.rs` | 41 | `serial_print!` macros, serial port init |
 | `vga_buffer.rs` | 18 | `println!`/`print!` macros (serial + framebuffer) |
-| `framebuffer.rs` | 150 | Pixel text renderer, scrolling, RGB/BGR |
+| `framebuffer.rs` | 150 | Pixel text renderer, scrolling, RGB/BGR, manual `Debug` impl |
 | `font.rs` | 108 | 8×16 VGA font (96 glyphs, 1536 bytes) |
 
 ### Async Runtime (5)
 
 | Module | LOC | Purpose |
 |--------|-----|---------|
-| `task/mod.rs` | 35 | `Task` struct, `TaskId` atomic counter |
-| `task/executor.rs` | 111 | Async executor: `BTreeMap`, `ArrayQueue`, HLT idle |
+| `task/mod.rs` | 35 | `Task` struct, `TaskId`, manual `Debug` impl |
+| `task/executor.rs` | 111 | Async executor: `BTreeMap`, `ArrayQueue`, HLT idle, manual `Debug` impl |
 | `task/keyboard.rs` | 86 | Async scancode stream, interrupt-safe |
 | `array_queue.rs` | 81 | Lock-free SPSC ring buffer (replaces `crossbeam-queue`) |
 | `async_utils.rs` | 91 | `Stream`, `StreamExt`, `AtomicWaker` with interrupt guard (replaces `futures-util`) |
@@ -130,8 +129,8 @@ Two separate Cargo workspaces:
 
 | Module | LOC | Purpose |
 |--------|-----|---------|
-| `fs/mod.rs` | 156 | Hierarchical in-memory FS, `lazy_static` global `FS` |
-| `fs/inode.rs` | 94 | `Inode`, `InodeKind` (File/Directory), BTreeMap children |
+| `fs/mod.rs` | 156 | Hierarchical in-memory FS, `static FS` (no `lazy_static`), `&'static str` paths |
+| `fs/inode.rs` | 94 | `Inode` with `&'static str` names, const constructors, `#[derive(Debug)]` on `FileSystem` |
 
 ### Observability (4)
 
@@ -218,19 +217,17 @@ Physical memory:
 
 ---
 
-## Dependency Graph (Kernel, 15 crates)
+## Dependency Graph (Kernel, 14 crates)
 
 ```
 yonti_os (root)
 ├── bootloader_api 0.11      entry_point!, BootInfo, FrameBufferInfo
 ├── x86_64 0.15              port I/O, paging, IDT, GDT
 │   ├── bit_field, bitflags, volatile
-├── spin 0.9                 Mutex, Once
+├── spin 0.9                 Mutex, Once, RwLock
 │   ├── lock_api, scopeguard
-├── lazy_static 1.0          Static initialization
+├── lazy_static 1.0          Static initialization (GDT/TSS, IDT)
 ├── pc-keyboard 0.5          Scancode decoding
-├── linked_list_allocator 0.10  Heap fallback
-│   └── spinning_top
 ├── log 0.4                  Log facade (no_std, info max)
 ├── const_fn 0.4             (proc-macro, build-time)
 └── rustversion 1.0          (proc-macro, build-time)
@@ -241,7 +238,7 @@ Inline modules (replaced external crates):
   async_utils.rs ← futures-util (+4 transitive)
   once_cell.rs ← conquer-once (+1 transitive)
 
-Net reduction: 32 → 15 crates (53% fewer)
+Net reduction: 32 → 14 crates (56% fewer)
 ```
 
 ---
@@ -253,12 +250,19 @@ Net reduction: 32 → 15 crates (53% fewer)
 
 | TLSF as global allocator | O(1) guarantee, better fragmentation than fixed-size block allocator |
 | Buddy frame allocator | Enables frame deallocation (prerequisite for slab allocator) |
-| Inline driver modules | Eliminated 17 crates, zero duplicate versions |
+| Inline driver modules | Eliminated 18 crates, zero duplicate versions |
 | Unified test binary | 4 QEMU boots → 2 (93s → 49s, 47% faster) |
 | Observability pipeline | log → monitor → trace → debug, each builds on the prior |
 | `--cfg bazel` guard in lib.rs | Bazel compiles library with test API but without entry_point |
 | AtomicWaker interrupt guard | `without_interrupts()` prevents ISR/task data race |
 | buddy NULL_LINK = usize::MAX | Frame index 0 is valid; zero sentinel would truncate free lists |
+| Bounded UART `wait_for!` | 100K retries prevents infinite spin if UART hardware hangs |
+| Page fault → `panic!` | Triggers crash dump (registers, stack trace, metrics, trace events) |
+| `SyncUnsafeCell` IST stack | Replaces `static mut` for double-fault stack; multicore-ready with `#![feature(sync_unsafe_cell)]` |
+| `static FS` (no `lazy_static`) | `&'static str` Inode names + const constructors eliminate one-time init overhead |
+| `#[derive(Debug)]` on public types | `FileSystem`, `TlsfAllocator`, `BuddyAllocator` provide useful panic diagnostics |
+| DRY `align_up` | Single `pub(crate)` definition in `allocator.rs` with `debug_assert!(is_power_of_two)` |
+| TLSF 4 GiB guard | `debug_assert!` on `u32` truncation; module-level doc warns about heap size limits |
 
 ---
 

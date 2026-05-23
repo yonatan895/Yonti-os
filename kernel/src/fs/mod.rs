@@ -15,23 +15,23 @@
 /// ```
 pub mod inode;
 
-use alloc::string::String;
 use alloc::vec::Vec;
 use inode::{Inode, InodeKind};
 use spin::RwLock;
 
+#[derive(Debug)]
 pub struct FileSystem {
     root: Inode,
 }
 
 impl FileSystem {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         FileSystem {
             root: Inode::new_directory("/"),
         }
     }
 
-    pub fn create_file(&mut self, path: &str) -> Result<(), &'static str> {
+    pub fn create_file(&mut self, path: &'static str) -> Result<(), &'static str> {
         let (parent, name) = resolve_path(path)?;
         let dir = find_dir_mut(&mut self.root, parent)?;
         if dir.find_child(name).is_some() {
@@ -39,14 +39,14 @@ impl FileSystem {
         }
         match &mut dir.kind {
             InodeKind::Directory(children) => {
-                children.insert(String::from(name), Inode::new_file(name));
+                children.insert(name, Inode::new_file(name));
                 Ok(())
             }
             _ => unreachable!(),
         }
     }
 
-    pub fn create_dir(&mut self, path: &str) -> Result<(), &'static str> {
+    pub fn create_dir(&mut self, path: &'static str) -> Result<(), &'static str> {
         let (parent, name) = resolve_path(path)?;
         let dir = find_dir_mut(&mut self.root, parent)?;
         if dir.find_child(name).is_some() {
@@ -54,45 +54,45 @@ impl FileSystem {
         }
         match &mut dir.kind {
             InodeKind::Directory(children) => {
-                children.insert(String::from(name), Inode::new_directory(name));
+                children.insert(name, Inode::new_directory(name));
                 Ok(())
             }
             _ => unreachable!(),
         }
     }
 
-    pub fn read_file(&self, path: &str) -> Result<Vec<u8>, &'static str> {
+    pub fn read_file(&self, path: &'static str) -> Result<Vec<u8>, &'static str> {
         let inode = find_inode(&self.root, path)?;
         inode.read().map(|d| d.to_vec()).ok_or("not a file")
     }
 
     /// Write data to a file, replacing any existing contents.
-    pub fn write_file(&mut self, path: &str, data: &[u8]) -> Result<(), &'static str> {
+    pub fn write_file(&mut self, path: &'static str, data: &[u8]) -> Result<(), &'static str> {
         let inode = find_inode_mut(&mut self.root, path)?;
         inode.write(data)
     }
 
     /// Append data to the end of a file.
-    pub fn append_file(&mut self, path: &str, data: &[u8]) -> Result<(), &'static str> {
+    pub fn append_file(&mut self, path: &'static str, data: &[u8]) -> Result<(), &'static str> {
         let inode = find_inode_mut(&mut self.root, path)?;
         inode.append(data)
     }
 
     /// List the names of all children in a directory.
-    pub fn list_dir(&self, path: &str) -> Result<Vec<String>, &'static str> {
+    pub fn list_dir(&self, path: &'static str) -> Result<Vec<&'static str>, &'static str> {
         let inode = find_inode(&self.root, path)?;
         match &inode.kind {
-            InodeKind::Directory(children) => Ok(children.keys().cloned().collect()),
+            InodeKind::Directory(children) => Ok(children.keys().copied().collect()),
             InodeKind::File(_) => Err("not a directory"),
         }
     }
 
-    pub fn exists(&self, path: &str) -> bool {
+    pub fn exists(&self, path: &'static str) -> bool {
         find_inode(&self.root, path).is_ok()
     }
 
     /// Remove a file or directory at the given path.
-    pub fn remove(&mut self, path: &str) -> Result<(), &'static str> {
+    pub fn remove(&mut self, path: &'static str) -> Result<(), &'static str> {
         let (parent, name) = resolve_path(path)?;
         let dir = find_dir_mut(&mut self.root, parent)?;
         dir.remove_child(name)?;
@@ -106,7 +106,7 @@ impl Default for FileSystem {
     }
 }
 
-fn find_inode<'a>(root: &'a Inode, path: &str) -> Result<&'a Inode, &'static str> {
+fn find_inode<'a>(root: &'a Inode, path: &'static str) -> Result<&'a Inode, &'static str> {
     let parts = split_path(path);
     let mut current = root;
     for part in &parts {
@@ -115,7 +115,10 @@ fn find_inode<'a>(root: &'a Inode, path: &str) -> Result<&'a Inode, &'static str
     Ok(current)
 }
 
-fn find_inode_mut<'a>(root: &'a mut Inode, path: &str) -> Result<&'a mut Inode, &'static str> {
+fn find_inode_mut<'a>(
+    root: &'a mut Inode,
+    path: &'static str,
+) -> Result<&'a mut Inode, &'static str> {
     let parts = split_path(path);
     let mut current = root;
     for part in &parts {
@@ -124,7 +127,10 @@ fn find_inode_mut<'a>(root: &'a mut Inode, path: &str) -> Result<&'a mut Inode, 
     Ok(current)
 }
 
-fn find_dir_mut<'a>(root: &'a mut Inode, path: &str) -> Result<&'a mut Inode, &'static str> {
+fn find_dir_mut<'a>(
+    root: &'a mut Inode,
+    path: &'static str,
+) -> Result<&'a mut Inode, &'static str> {
     let dir = find_inode_mut(root, path)?;
     match dir.kind {
         InodeKind::Directory(_) => Ok(dir),
@@ -132,7 +138,7 @@ fn find_dir_mut<'a>(root: &'a mut Inode, path: &str) -> Result<&'a mut Inode, &'
     }
 }
 
-fn resolve_path(path: &str) -> Result<(&str, &str), &'static str> {
+fn resolve_path(path: &'static str) -> Result<(&'static str, &'static str), &'static str> {
     if path.is_empty() || path == "/" {
         return Err("invalid path");
     }
@@ -155,15 +161,11 @@ fn resolve_path(path: &str) -> Result<(&str, &str), &'static str> {
     }
 }
 
-fn split_path(path: &str) -> Vec<&str> {
+fn split_path(path: &'static str) -> Vec<&'static str> {
     path.trim_matches('/')
         .split('/')
         .filter(|s| !s.is_empty())
         .collect()
 }
 
-use lazy_static::lazy_static;
-
-lazy_static! {
-    pub static ref FS: RwLock<FileSystem> = RwLock::new(FileSystem::new());
-}
+pub static FS: RwLock<FileSystem> = RwLock::new(FileSystem::new());

@@ -17,6 +17,7 @@ const BITMAP_U64_LEN: usize = MAX_TRACKED_FRAMES / 64;
 /// Sentinel value for free-list links. Must never be a valid frame index.
 const NULL_LINK: usize = usize::MAX;
 
+#[derive(Debug)]
 pub struct BuddyAllocator {
     free_lists: [Option<usize>; MAX_ORDER + 1],
     bitmap: [u64; BITMAP_U64_LEN],

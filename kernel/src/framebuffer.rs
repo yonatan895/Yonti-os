@@ -124,6 +124,19 @@ impl FrameBufferWriter {
     }
 }
 
+impl fmt::Debug for FrameBufferWriter {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("FrameBufferWriter")
+            .field("buffer", &self.buffer.as_ptr())
+            .field("width", &self.info.width)
+            .field("height", &self.info.height)
+            .field("bytes_per_pixel", &self.info.bytes_per_pixel)
+            .field("x_pos", &self.x_pos)
+            .field("y_pos", &self.y_pos)
+            .finish()
+    }
+}
+
 impl fmt::Write for FrameBufferWriter {
     fn write_str(&mut self, s: &str) -> fmt::Result {
         self.write_string(s);

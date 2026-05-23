@@ -3,7 +3,16 @@ use crate::array_queue::ArrayQueue;
 use crate::monitor;
 use alloc::task::Wake;
 use alloc::{collections::BTreeMap, sync::Arc};
+use core::fmt;
 use core::task::{Context, Poll, Waker};
+
+impl fmt::Debug for Executor {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Executor")
+            .field("task_count", &self.tasks.len())
+            .finish()
+    }
+}
 
 pub struct Executor {
     tasks: BTreeMap<TaskId, Task>,
