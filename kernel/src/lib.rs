@@ -9,6 +9,7 @@
 extern crate alloc;
 
 pub mod allocator;
+pub mod apic;
 pub mod array_queue;
 pub mod async_utils;
 pub mod debug;
@@ -42,15 +43,15 @@ pub static BOOTLOADER_CONFIG: BootloaderConfig = {
 };
 
 pub fn init() {
-    use x86_64::instructions;
     // Bootloader 0.11 already sets up GDT/TSS.
     // Only SSE, IDT, and PIC need explicit init.
+    // Note: interrupts are NOT enabled here — the caller must enable
+    // them after APIC (or PIC-only) initialisation is complete.
     unsafe {
         sse::init();
     }
     interrupts::init_idt();
     unsafe { interrupts::PICS.lock().initialize() };
-    instructions::interrupts::enable();
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
