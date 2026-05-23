@@ -62,6 +62,7 @@ bazel build --config=bare //kernel:yonti_os
 - **TLSF heap allocator** (O(1) worst-case, 1 MiB at `0x4444_4444_0000`)
 - **Async executor** with cooperative multitasking
 - **Async keyboard** input via scancode queue and atomic waker
+- **Observability**: structured logging (log crate), atomic metrics (`monitor.rs`), execution tracing ring buffer (`trace.rs`), crash diagnostics with register dump and stack backtrace (`debug.rs`)
 
 ### In-Memory Filesystem (`src/fs/`)
 
@@ -96,4 +97,9 @@ All jobs use Cargo. PR-only (no duplicate run on merge). Markdown-only PRs skip 
 
 ## Architecture
 
-See [DESIGN.md](DESIGN.md) for the full build system architecture, dependency graph, boot process, and memory layout.
+See [DESIGN.md](DESIGN.md) for the full build system architecture, dependency graph, boot process, memory layout, and module reference.
+
+## Documentation
+
+- [DESIGN.md](DESIGN.md) — Build systems, architecture, CI pipeline, boot process
+- [AGENTS.md](AGENTS.md) — Agent guidance, coding principles, build/test commands
