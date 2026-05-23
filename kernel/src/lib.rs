@@ -23,6 +23,7 @@ pub mod monitor;
 pub mod once_cell;
 pub mod pic;
 pub mod serial;
+pub mod shell;
 pub mod sse;
 pub mod task;
 pub mod trace;

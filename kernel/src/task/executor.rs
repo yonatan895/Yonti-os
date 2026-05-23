@@ -6,6 +6,8 @@ use alloc::{collections::BTreeMap, sync::Arc};
 use core::fmt;
 use core::task::{Context, Poll, Waker};
 
+const MAX_TASKS: usize = 100;
+
 impl fmt::Debug for Executor {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Executor")
@@ -23,7 +25,7 @@ impl Executor {
     pub fn new() -> Self {
         Executor {
             tasks: BTreeMap::new(),
-            task_queue: Arc::new(ArrayQueue::new(100)),
+            task_queue: Arc::new(ArrayQueue::new(MAX_TASKS)),
         }
     }
 
@@ -97,7 +99,9 @@ impl TaskWaker {
     }
 
     fn wake_task(&self) {
-        let _ = self.task_queue.push(self.task_id);
+        if self.task_queue.push(self.task_id).is_err() {
+            monitor::inc_dropped_wake();
+        }
     }
 }
 

@@ -16,8 +16,8 @@ fn create_and_list_directory() {
     fs.create_file("/mydir/b").expect("create /mydir/b");
     let list = fs.list_dir("/mydir").expect("list /mydir");
     assert_eq!(list.len(), 2);
-    assert!(list.contains(&"a"));
-    assert!(list.contains(&"b"));
+    assert!(list.contains(&alloc::string::String::from("a")));
+    assert!(list.contains(&alloc::string::String::from("b")));
 }
 
 #[test_case]

@@ -1,33 +1,35 @@
+use super::FsError;
 use alloc::collections::BTreeMap;
+use alloc::string::String;
 use alloc::vec::Vec;
 
 /// A file containing raw byte data, or a directory containing child inodes.
 #[derive(Debug, Clone)]
 pub enum InodeKind {
     File(Vec<u8>),
-    Directory(BTreeMap<&'static str, Inode>),
+    Directory(BTreeMap<String, Inode>),
 }
 
 /// A node in the filesystem tree, either a file or a directory.
 #[derive(Debug, Clone)]
 pub struct Inode {
-    pub name: &'static str,
+    pub name: String,
     pub kind: InodeKind,
 }
 
 impl Inode {
     /// Create a new empty file inode.
-    pub const fn new_file(name: &'static str) -> Self {
+    pub fn new_file(name: &str) -> Self {
         Inode {
-            name,
+            name: String::from(name),
             kind: InodeKind::File(Vec::new()),
         }
     }
 
     /// Create a new empty directory inode.
-    pub const fn new_directory(name: &'static str) -> Self {
+    pub fn new_directory(name: &str) -> Self {
         Inode {
-            name,
+            name: String::from(name),
             kind: InodeKind::Directory(BTreeMap::new()),
         }
     }
@@ -43,23 +45,23 @@ impl Inode {
     /// Replace the file contents with the given data.
     ///
     /// Returns an error if this inode is a directory.
-    pub fn write(&mut self, data: &[u8]) -> Result<(), &'static str> {
+    pub fn write(&mut self, data: &[u8]) -> Result<(), FsError> {
         match &mut self.kind {
             InodeKind::File(buf) => {
                 *buf = Vec::from(data);
                 Ok(())
             }
-            InodeKind::Directory(_) => Err("cannot write data to a directory"),
+            InodeKind::Directory(_) => Err(FsError::NotAFile),
         }
     }
 
-    pub fn append(&mut self, data: &[u8]) -> Result<(), &'static str> {
+    pub fn append(&mut self, data: &[u8]) -> Result<(), FsError> {
         match &mut self.kind {
             InodeKind::File(buf) => {
                 buf.extend_from_slice(data);
                 Ok(())
             }
-            InodeKind::Directory(_) => Err("cannot append data to a directory"),
+            InodeKind::Directory(_) => Err(FsError::NotAFile),
         }
     }
 
@@ -84,19 +86,17 @@ impl Inode {
         }
     }
 
-    pub fn list_children(&self) -> Vec<&'static str> {
+    pub fn list_children(&self) -> Vec<String> {
         match &self.kind {
-            InodeKind::Directory(children) => children.keys().copied().collect(),
+            InodeKind::Directory(children) => children.keys().cloned().collect(),
             InodeKind::File(_) => Vec::new(),
         }
     }
 
-    pub fn remove_child(&mut self, name: &str) -> Result<Inode, &'static str> {
+    pub fn remove_child(&mut self, name: &str) -> Result<Inode, FsError> {
         match &mut self.kind {
-            InodeKind::Directory(children) => {
-                children.remove(name).ok_or("file/directory not found")
-            }
-            InodeKind::File(_) => Err("cannot remove child from a file"),
+            InodeKind::Directory(children) => children.remove(name).ok_or(FsError::NotFound),
+            InodeKind::File(_) => Err(FsError::NotADirectory),
         }
     }
 }

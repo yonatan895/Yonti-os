@@ -43,7 +43,7 @@ struct TraceBuffer {
 unsafe impl Sync for TraceBuffer {}
 
 static TRACE: TraceBuffer = TraceBuffer {
-    entries: UnsafeCell::new(MaybeUninit::uninit()),
+    entries: UnsafeCell::new(MaybeUninit::zeroed()),
     write_idx: AtomicUsize::new(0),
     overflow_count: AtomicU64::new(0),
     initialized: AtomicU64::new(0),

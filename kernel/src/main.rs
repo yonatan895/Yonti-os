@@ -14,7 +14,7 @@ use yonti_os::fs;
 use yonti_os::log;
 use yonti_os::memory;
 use yonti_os::println;
-use yonti_os::task::keyboard;
+use yonti_os::shell;
 use yonti_os::task::{Task, executor::Executor};
 use yonti_os::trace;
 
@@ -54,7 +54,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 
     let mut executor = Executor::new();
     executor.spawn(Task::new(example_task()));
-    executor.spawn(Task::new(keyboard::print_keypresses()));
+    executor.spawn(Task::new(shell::shell_task()));
     executor.run();
 }
 
