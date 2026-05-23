@@ -109,6 +109,7 @@ gh pr create --base master --title "..." --body "..."
 ```
 
 Branch naming conventions:
+
 - `feature/<description>` — new functionality
 - `fix/<description>` — bug fixes
 - `refactor/<description>` — code restructuring

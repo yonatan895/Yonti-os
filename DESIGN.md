@@ -5,6 +5,7 @@ Bare-metal x86_64 kernel in Rust. Two build systems in parallel: **Cargo** (orig
 ---
 
 ## Workspace Structure
+
 ```text
 Yonti-os/
 ├── Cargo.toml            # Workspace root: members = ["kernel"]
