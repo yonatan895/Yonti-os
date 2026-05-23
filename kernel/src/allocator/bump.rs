@@ -11,6 +11,7 @@ pub struct BumpAllocator {
 
 impl BumpAllocator {
     /// Creates a new empty bump allocator.
+    #[allow(clippy::new_without_default)]
     pub const fn new() -> Self {
         BumpAllocator {
             heap_start: 0,
@@ -22,8 +23,10 @@ impl BumpAllocator {
 
     /// Initializes the bump allocator with the given heap bounds.
     ///
-    /// This method is unsafe because the caller must ensure that the given
-    /// memory range is unused. Also, this method must be called only once.
+    /// # Safety
+    ///
+    /// The caller must ensure that the given memory range is unused and
+    /// that this method is called only once.
     pub unsafe fn init(&mut self, heap_start: usize, heap_size: usize) {
         self.heap_start = heap_start;
         self.heap_end = heap_start + heap_size;

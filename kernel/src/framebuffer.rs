@@ -2,7 +2,7 @@ use bootloader_api::info::{FrameBufferInfo, PixelFormat};
 use core::fmt;
 use spin::Mutex;
 
-use crate::font::{CHAR_HEIGHT, CHAR_WIDTH, FONT_BASIC, FONT_OFFSET, FALLBACK_INDEX};
+use crate::font::{CHAR_HEIGHT, CHAR_WIDTH, FALLBACK_INDEX, FONT_BASIC, FONT_OFFSET};
 
 pub struct FrameBufferWriter {
     buffer: &'static mut [u8],

@@ -124,7 +124,7 @@ fn find_dir_mut<'a>(root: &'a mut Inode, path: &str) -> Result<&'a mut Inode, &'
     }
 }
 
-fn resolve_path<'a>(path: &'a str) -> Result<(&'a str, &'a str), &'static str> {
+fn resolve_path(path: &str) -> Result<(&str, &str), &'static str> {
     if path.is_empty() || path == "/" {
         return Err("invalid path");
     }

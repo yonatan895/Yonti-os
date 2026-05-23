@@ -27,6 +27,7 @@ pub struct LinkedListAllocator {
 
 impl LinkedListAllocator {
     /// Creates an empty LinkedListAllocator.
+    #[allow(clippy::new_without_default)]
     pub const fn new() -> Self {
         Self {
             head: ListNode::new(0),
@@ -35,9 +36,10 @@ impl LinkedListAllocator {
 
     /// Initialize the allocator with the given heap bounds.
     ///
-    /// This function is unsafe because the caller must guarantee that the given
-    /// heap bounds are valid and that the heap is unused. This method must be
-    /// called only once.
+    /// # Safety
+    ///
+    /// The caller must guarantee that the given heap bounds are valid,
+    /// the heap is unused, and this method is called only once.
     pub unsafe fn init(&mut self, heap_start: usize, heap_size: usize) {
         self.add_free_region(heap_start, heap_size);
     }
