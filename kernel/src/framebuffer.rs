@@ -4,6 +4,8 @@ use spin::Mutex;
 
 use crate::font::{CHAR_HEIGHT, CHAR_WIDTH, FALLBACK_INDEX, FONT_BASIC, FONT_OFFSET};
 
+const CURSOR_HEIGHT: usize = 2;
+
 const ANSI_COLORS: [(u8, u8, u8); 8] = [
     (0, 0, 0),
     (170, 0, 0),
@@ -33,6 +35,7 @@ pub struct FrameBufferWriter {
     escape_state: EscapeState,
     csi_buf: [u8; 8],
     csi_pos: usize,
+    cursor_shown: bool,
 }
 
 impl FrameBufferWriter {
@@ -47,6 +50,7 @@ impl FrameBufferWriter {
             escape_state: EscapeState::Normal,
             csi_buf: [0; 8],
             csi_pos: 0,
+            cursor_shown: false,
         }
     }
 
@@ -153,22 +157,59 @@ impl FrameBufferWriter {
         }
     }
 
+    fn erase_cursor(&mut self) {
+        if !self.cursor_shown {
+            return;
+        }
+        let (r, g, b) = self.bg;
+        let cursor_y = self.y_pos + CHAR_HEIGHT - CURSOR_HEIGHT;
+        for y in 0..CURSOR_HEIGHT {
+            for x in 0..CHAR_WIDTH {
+                self.write_pixel(self.x_pos + x, cursor_y + y, r, g, b);
+            }
+        }
+        self.cursor_shown = false;
+    }
+
+    fn draw_cursor(&mut self) {
+        if self.cursor_shown {
+            return;
+        }
+        let (r, g, b) = self.fg;
+        let cursor_y = self.y_pos + CHAR_HEIGHT - CURSOR_HEIGHT;
+        for y in 0..CURSOR_HEIGHT {
+            for x in 0..CHAR_WIDTH {
+                self.write_pixel(self.x_pos + x, cursor_y + y, r, g, b);
+            }
+        }
+        self.cursor_shown = true;
+    }
+
     pub fn write_byte(&mut self, byte: u8) {
         match self.escape_state {
             EscapeState::Normal => match byte {
                 0x1b => self.escape_state = EscapeState::SawEsc,
-                b'\n' => self.new_line(),
+                b'\n' => {
+                    self.erase_cursor();
+                    self.new_line();
+                    self.draw_cursor();
+                }
                 0x08 => {
+                    self.erase_cursor();
                     if self.x_pos >= CHAR_WIDTH {
                         self.x_pos -= CHAR_WIDTH;
                     }
+                    self.draw_cursor();
                 }
                 byte => {
                     if self.x_pos + CHAR_WIDTH > self.info.width {
+                        self.erase_cursor();
                         self.new_line();
                     }
                     self.draw_char(self.x_pos, self.y_pos, byte);
+                    self.cursor_shown = false;
                     self.x_pos += CHAR_WIDTH;
+                    self.draw_cursor();
                 }
             },
             EscapeState::SawEsc => {
@@ -249,11 +290,15 @@ impl FrameBufferWriter {
         self.buffer.fill(0);
         self.x_pos = 0;
         self.y_pos = 0;
+        self.cursor_shown = false;
+        self.draw_cursor();
     }
 
     pub fn set_cursor(&mut self, x: usize, y: usize) {
+        self.erase_cursor();
         self.x_pos = x;
         self.y_pos = y;
+        self.draw_cursor();
     }
 
     pub fn fg_color(&self) -> (u8, u8, u8) {
