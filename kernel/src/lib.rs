@@ -14,6 +14,7 @@ pub mod fs;
 pub mod gdt;
 pub mod interrupts;
 pub mod memory;
+pub mod once_cell;
 pub mod pic;
 pub mod serial;
 pub mod sse;
