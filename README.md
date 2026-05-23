@@ -9,6 +9,7 @@ A bare-metal x86_64 operating system kernel written in Rust.
 - **QEMU** (`qemu-system-x86_64`)
 
 Optional for local development:
+
 - **Bazel 7.4+** (via `bazelisk`) — hermetic builds
 - **cargo-deny** — license/security audit
 
