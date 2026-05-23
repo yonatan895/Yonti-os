@@ -13,7 +13,7 @@ mod file_system;
 #[path = "common/heap_allocation.rs"]
 mod heap_allocation;
 
-use bootloader_api::{entry_point, BootInfo};
+use bootloader_api::{BootInfo, entry_point};
 use core::panic::PanicInfo;
 use x86_64::VirtAddr;
 use yonti_os::allocator;

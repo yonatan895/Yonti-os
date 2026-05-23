@@ -1,4 +1,4 @@
-use super::{align_up, Locked};
+use super::{Locked, align_up};
 use alloc::alloc::{GlobalAlloc, Layout};
 use core::mem;
 use core::ptr;
@@ -41,7 +41,9 @@ impl LinkedListAllocator {
     /// The caller must guarantee that the given heap bounds are valid,
     /// the heap is unused, and this method is called only once.
     pub unsafe fn init(&mut self, heap_start: usize, heap_size: usize) {
-        self.add_free_region(heap_start, heap_size);
+        unsafe {
+            self.add_free_region(heap_start, heap_size);
+        }
     }
 
     /// Adds the given memory region to the front of the list.
@@ -54,8 +56,10 @@ impl LinkedListAllocator {
         let mut node = ListNode::new(size);
         node.next = self.head.next.take();
         let node_ptr = addr as *mut ListNode;
-        node_ptr.write(node);
-        self.head.next = Some(&mut *node_ptr)
+        unsafe {
+            node_ptr.write(node);
+            self.head.next = Some(&mut *node_ptr)
+        }
     }
 
     /// Looks for a free region with the given size and alignment and removes
@@ -131,7 +135,9 @@ unsafe impl GlobalAlloc for Locked<LinkedListAllocator> {
             let alloc_end = alloc_start.checked_add(size).expect("overflow");
             let excess_size = region.end_addr() - alloc_end;
             if excess_size > 0 {
-                allocator.add_free_region(alloc_end, excess_size);
+                unsafe {
+                    allocator.add_free_region(alloc_end, excess_size);
+                }
             }
             alloc_start as *mut u8
         } else {
@@ -143,6 +149,6 @@ unsafe impl GlobalAlloc for Locked<LinkedListAllocator> {
         // perform layout adjustments
         let (size, _) = LinkedListAllocator::size_align(layout);
 
-        self.lock().add_free_region(ptr as usize, size)
+        unsafe { self.lock().add_free_region(ptr as usize, size) }
     }
 }

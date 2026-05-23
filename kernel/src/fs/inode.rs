@@ -46,7 +46,7 @@ impl Inode {
     /// Returns an error if this inode is a directory.
     pub fn write(&mut self, data: &[u8]) -> Result<(), &'static str> {
         match &mut self.kind {
-            InodeKind::File(ref mut buf) => {
+            InodeKind::File(buf) => {
                 *buf = Vec::from(data);
                 Ok(())
             }
@@ -56,7 +56,7 @@ impl Inode {
 
     pub fn append(&mut self, data: &[u8]) -> Result<(), &'static str> {
         match &mut self.kind {
-            InodeKind::File(ref mut buf) => {
+            InodeKind::File(buf) => {
                 buf.extend_from_slice(data);
                 Ok(())
             }

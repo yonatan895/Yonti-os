@@ -10,7 +10,7 @@ bazel_dep(name = "platforms", version = "1.0.0")
 
 rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
 rust.toolchain(
-    edition = "2021",
+    edition = "2024",
     versions = ["nightly/2026-05-21"],
     extra_target_triples = [
         "x86_64-unknown-none",

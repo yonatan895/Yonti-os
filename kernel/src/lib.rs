@@ -100,7 +100,7 @@ pub fn test_panic_handler(info: &PanicInfo) -> ! {
 }
 
 #[cfg(all(test, not(bazel)))]
-use bootloader_api::{entry_point, BootInfo};
+use bootloader_api::{BootInfo, entry_point};
 
 #[cfg(all(test, not(bazel)))]
 entry_point!(test_kernel_main, config = &BOOTLOADER_CONFIG);

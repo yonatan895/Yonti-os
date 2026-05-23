@@ -6,8 +6,8 @@
 //! A dense bitmap tracks which frames are free vs. allocated.
 
 use bootloader_api::info::{MemoryRegionKind, MemoryRegions};
-use x86_64::structures::paging::{FrameAllocator, PhysFrame, Size4KiB};
 use x86_64::PhysAddr;
+use x86_64::structures::paging::{FrameAllocator, PhysFrame, Size4KiB};
 
 use crate::monitor;
 

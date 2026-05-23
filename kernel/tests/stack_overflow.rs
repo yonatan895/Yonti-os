@@ -2,11 +2,11 @@
 #![no_main]
 #![feature(abi_x86_interrupt)]
 
-use bootloader_api::{entry_point, BootInfo};
+use bootloader_api::{BootInfo, entry_point};
 use core::panic::PanicInfo;
 use lazy_static::lazy_static;
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame};
-use yonti_os::{exit_qemu, serial_print, serial_println, QemuExitCode};
+use yonti_os::{QemuExitCode, exit_qemu, serial_print, serial_println};
 
 extern "x86-interrupt" fn test_double_fault_handler(
     _stack_frame: InterruptStackFrame,

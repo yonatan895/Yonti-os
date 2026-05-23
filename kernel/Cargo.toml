@@ -1,7 +1,7 @@
 [package]
 name = "yonti_os"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 license = "MIT"
 
 [[test]]
@@ -15,16 +15,16 @@ harness = false
 [dependencies]
 bootloader_api = "0.11.15"
 spin = { version = "0.9.8", default-features = false, features = ["spin_mutex", "once", "lock_api"] }
-x86_64 = "0.15.2"
-pc-keyboard = "0.5.0"
-linked_list_allocator = "0.10.2"
+x86_64 = "0.15.4"
+pc-keyboard = "0.9.0"
+linked_list_allocator = "0.10.6"
 
 [dependencies.lazy_static]
-version = "1.0"
+version = "1.5.0"
 features = ["spin_no_std"]
 
 [dependencies.log]
-version = "0.4"
+version = "0.4.29"
 default-features = false
 features = ["release_max_level_info"]
 
