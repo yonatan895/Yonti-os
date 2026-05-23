@@ -1,3 +1,4 @@
+use crate::framebuffer;
 use crate::fs::{self, FsError};
 use crate::monitor;
 use crate::trace;
@@ -191,9 +192,10 @@ impl Shell {
     }
 
     fn cmd_clear(&self) {
-        for _ in 0..50 {
-            println!();
-        }
+        framebuffer::with_framebuffer_mut(|fb| {
+            fb.clear_screen();
+        });
+        self.print_prompt();
     }
 
     fn cmd_echo(&self, text: String) {
