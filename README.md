@@ -29,10 +29,17 @@ sudo apt install qemu-system-x86
 # Build kernel ELF
 cd kernel && cargo build --target x86_64-unknown-none
 
-# Run in QEMU (BIOS mode)
+# Run in QEMU (BIOS mode, headless — serial console only)
 cd runner && cargo run --bin runner -- bios
 
+# Run in QEMU (BIOS mode, GUI — opens QEMU window with framebuffer)
+cd runner && cargo run --bin runner -- gui
 
+# Run with UEFI (headless)
+cd runner && cargo run --bin runner -- uefi
+
+# Enable the QEMU display window in any mode
+cd runner && cargo run --bin runner -- bios --display
 ```
 
 ## Test
