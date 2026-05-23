@@ -40,7 +40,10 @@ impl BuddyAllocator {
         let mut last_end = 0u64;
         let mut found_usable = false;
 
-        for r in memory_regions.iter().filter(|r| r.kind == MemoryRegionKind::Usable) {
+        for r in memory_regions
+            .iter()
+            .filter(|r| r.kind == MemoryRegionKind::Usable)
+        {
             found_usable = true;
             base = base.min(r.start);
             last_end = last_end.max(r.end);
@@ -56,7 +59,10 @@ impl BuddyAllocator {
         allocator.total_frames = total_frames;
 
         // Mark all usable frames as free
-        for r in memory_regions.iter().filter(|r| r.kind == MemoryRegionKind::Usable) {
+        for r in memory_regions
+            .iter()
+            .filter(|r| r.kind == MemoryRegionKind::Usable)
+        {
             let start_idx = ((r.start - allocator.base_phys) / 4096) as usize;
             let end_idx = ((r.end - allocator.base_phys) / 4096) as usize;
             for idx in start_idx..end_idx {
@@ -65,7 +71,10 @@ impl BuddyAllocator {
         }
 
         // Build free lists top-down: carve each usable range into max-order blocks
-        for r in memory_regions.iter().filter(|r| r.kind == MemoryRegionKind::Usable) {
+        for r in memory_regions
+            .iter()
+            .filter(|r| r.kind == MemoryRegionKind::Usable)
+        {
             let mut pos = ((r.start - allocator.base_phys) / 4096) as usize;
             let end = ((r.end - allocator.base_phys) / 4096) as usize;
 
@@ -166,11 +175,9 @@ impl BuddyAllocator {
                 let next = unsafe { *(self.frame_idx_to_ptr(cur_idx) as *const usize) };
                 let next = if next == 0 { None } else { Some(next) };
                 match prev {
-                    Some(p) => {
-                        unsafe {
-                            *(self.frame_idx_to_ptr(p) as *mut usize) = next.unwrap_or(0);
-                        }
-                    }
+                    Some(p) => unsafe {
+                        *(self.frame_idx_to_ptr(p) as *mut usize) = next.unwrap_or(0);
+                    },
                     None => {
                         self.free_lists[order] = next;
                     }

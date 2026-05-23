@@ -1,16 +1,17 @@
 pub mod bump;
 pub mod fixed_size_block;
 pub mod linked_list;
+pub mod tlsf;
 
 use alloc::alloc::{GlobalAlloc, Layout};
 use core::{convert::TryFrom, ptr::null_mut};
-use fixed_size_block::FixedSizeBlockAllocator;
+use tlsf::TlsfAllocator;
 
 pub const HEAP_START: usize = 0x_4444_4444_0000;
 pub const HEAP_SIZE: usize = 1_048_576; // 1 MB
 
 #[global_allocator]
-static ALLOCATOR: Locked<FixedSizeBlockAllocator> = Locked::new(FixedSizeBlockAllocator::new());
+static ALLOCATOR: Locked<TlsfAllocator> = Locked::new(TlsfAllocator::new());
 
 pub struct Locked<A> {
     inner: spin::Mutex<A>,
@@ -25,6 +26,17 @@ impl<A> Locked<A> {
 
     pub fn lock(&self) -> spin::MutexGuard<'_, A> {
         self.inner.lock()
+    }
+}
+
+unsafe impl GlobalAlloc for Locked<TlsfAllocator> {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        let mut tlsf = self.lock();
+        tlsf.malloc(layout.size())
+    }
+
+    unsafe fn dealloc(&self, ptr: *mut u8, _layout: Layout) {
+        self.lock().free(ptr);
     }
 }
 

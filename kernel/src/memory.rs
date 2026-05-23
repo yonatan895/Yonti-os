@@ -2,7 +2,10 @@ pub mod buddy;
 
 use x86_64::registers::control::Cr3;
 use x86_64::{
-    structures::paging::{FrameAllocator, Mapper, OffsetPageTable, Page, PageTable, PageTableFlags as Flags, PhysFrame, Size4KiB},
+    structures::paging::{
+        FrameAllocator, Mapper, OffsetPageTable, Page, PageTable, PageTableFlags as Flags,
+        PhysFrame, Size4KiB,
+    },
     PhysAddr, VirtAddr,
 };
 
