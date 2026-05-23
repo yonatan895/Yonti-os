@@ -16,6 +16,9 @@ rust.toolchain(
         "x86_64-unknown-none",
         "x86_64-unknown-linux-gnu",
     ],
+    extra_rustc_flags = [
+        "-C", "linker=rust-lld",
+    ],
 )
 use_repo(rust, "rust_toolchains")
 register_toolchains("@rust_toolchains//:all")
