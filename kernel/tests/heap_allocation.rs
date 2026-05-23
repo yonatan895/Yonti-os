@@ -32,8 +32,10 @@ fn main(boot_info: &'static mut BootInfo) -> ! {
             .expect("physical_memory_offset not set"),
     );
     let mut mapper = unsafe { memory::init(phys_mem_offset) };
-    let mut frame_allocator = unsafe { BootInfoFrameAllocator::init(&mut boot_info.memory_regions) };
-    yonti_os::allocator::init_heap(&mut mapper, &mut frame_allocator).expect("heap initialization failed");
+    let mut frame_allocator =
+        unsafe { BootInfoFrameAllocator::init(&mut boot_info.memory_regions) };
+    yonti_os::allocator::init_heap(&mut mapper, &mut frame_allocator)
+        .expect("heap initialization failed");
 
     test_main();
     yonti_os::hlt_loop();

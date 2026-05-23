@@ -7,16 +7,16 @@
 extern crate alloc;
 
 pub mod allocator;
-pub mod framebuffer;
 pub mod font;
+pub mod framebuffer;
 pub mod fs;
 pub mod gdt;
 pub mod interrupts;
 pub mod memory;
 pub mod serial;
+pub mod sse;
 pub mod task;
 pub mod vga_buffer;
-pub mod sse;
 
 use core::panic::PanicInfo;
 
@@ -33,7 +33,9 @@ pub fn init() {
     use x86_64::instructions;
     // Bootloader 0.11 already sets up GDT/TSS.
     // Only SSE, IDT, and PIC need explicit init.
-    unsafe { sse::init(); }
+    unsafe {
+        sse::init();
+    }
     interrupts::init_idt();
     unsafe { interrupts::PICS.lock().initialize() };
     instructions::interrupts::enable();

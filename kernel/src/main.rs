@@ -12,9 +12,9 @@ use x86_64::VirtAddr;
 use yonti_os::allocator;
 use yonti_os::fs;
 use yonti_os::memory;
+use yonti_os::println;
 use yonti_os::task::keyboard;
 use yonti_os::task::{executor::Executor, Task};
-use yonti_os::println;
 
 entry_point!(kernel_main, config = &yonti_os::BOOTLOADER_CONFIG);
 fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
@@ -74,7 +74,8 @@ fn demo_fs() {
     }
     fs.create_dir("/home").expect("create /home");
     fs.create_file("/home/test").expect("create /home/test");
-    fs.write_file("/home/test", b"nested file!").expect("write /home/test");
+    fs.write_file("/home/test", b"nested file!")
+        .expect("write /home/test");
     let contents = fs.list_dir("/").expect("list /");
     println!("[fs] / contents: {:?}", contents);
     let contents = fs.list_dir("/home").expect("list /home");
