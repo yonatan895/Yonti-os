@@ -1,0 +1,100 @@
+load("@crates_kernel//:defs.bzl", "all_crate_deps")
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library")
+
+# Shared flags for bare-metal x86_64-unknown-none
+KERNEL_FLAGS = [
+    "-C", "panic=abort",
+    "-C", "relocation-model=static",
+    "-C", "linker=rust-lld",
+]
+
+# ── Kernel library ──────────────────────────────────────────────────
+
+rust_library(
+    name = "yonti_os_lib",
+    crate_name = "yonti_os",
+    srcs = glob(
+        ["src/**/*.rs"],
+        exclude = ["src/main.rs"],
+    ),
+    crate_root = "src/lib.rs",
+    edition = "2021",
+    target_compatible_with = [
+        "@platforms//os:none",
+        "@platforms//cpu:x86_64",
+    ],
+    rustc_flags = KERNEL_FLAGS,
+    compile_data = glob(["src/**/*.rs"]),
+    deps = all_crate_deps(normal = True),
+    proc_macro_deps = all_crate_deps(proc_macro = True),
+)
+
+# ── Kernel binary (main.rs links the library) ───────────────────────
+
+rust_binary(
+    name = "yonti_os",
+    srcs = ["src/main.rs"],
+    edition = "2021",
+    target_compatible_with = [
+        "@platforms//os:none",
+        "@platforms//cpu:x86_64",
+    ],
+    rustc_flags = KERNEL_FLAGS,
+    deps = [":yonti_os_lib"] + all_crate_deps(normal = True),
+    proc_macro_deps = all_crate_deps(proc_macro = True),
+)
+
+# ── Kernel library (test-configured, for test binaries) ────────────
+# Compiled with --cfg test (to enable #[cfg(test)] public API) but
+# --cfg bazel (to suppress lib.rs's own test entry_point/harness).
+
+rust_library(
+    name = "yonti_os_lib_test",
+    crate_name = "yonti_os",
+    srcs = glob(
+        ["src/**/*.rs"],
+        exclude = ["src/main.rs"],
+    ),
+    crate_root = "src/lib.rs",
+    edition = "2021",
+    target_compatible_with = [
+        "@platforms//os:none",
+        "@platforms//cpu:x86_64",
+    ],
+    rustc_flags = KERNEL_FLAGS + ["--cfg", "test", "--cfg", "bazel"],
+    compile_data = glob(["src/**/*.rs"]),
+    deps = all_crate_deps(normal = True),
+    proc_macro_deps = all_crate_deps(proc_macro = True),
+)
+
+# ── Unified test binary (all 10 tests in one boot) ─────────────────
+
+rust_binary(
+    name = "all_tests_elf",
+    srcs = glob(["tests/common/**/*.rs"]) + ["tests/all.rs"],
+    crate_root = "tests/all.rs",
+    edition = "2021",
+    target_compatible_with = [
+        "@platforms//os:none",
+        "@platforms//cpu:x86_64",
+    ],
+    rustc_flags = KERNEL_FLAGS + ["--test"],
+    deps = [":yonti_os_lib_test"] + all_crate_deps(normal = True),
+    proc_macro_deps = all_crate_deps(proc_macro = True),
+)
+
+# ── Standalone should_panic test ───────────────────────────────────
+
+rust_binary(
+    name = "should_panic_elf",
+    srcs = ["tests/should_panic.rs"],
+    crate_root = "tests/should_panic.rs",
+    edition = "2021",
+    target_compatible_with = [
+        "@platforms//os:none",
+        "@platforms//cpu:x86_64",
+    ],
+    rustc_flags = KERNEL_FLAGS,
+    deps = [":yonti_os_lib"] + all_crate_deps(normal = True),
+    proc_macro_deps = all_crate_deps(proc_macro = True),
+)

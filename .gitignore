@@ -1,2 +1,7 @@
 /target
 runner/target
+/bazel-bin
+/bazel-out
+/bazel-testlogs
+/bazel-Yonti-os
+MODULE.bazel.lock
