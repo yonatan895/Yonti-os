@@ -36,7 +36,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 
     let mut mapper = unsafe { memory::init(phys_mem_offset) };
     let mut frame_allocator =
-        unsafe { memory::BootInfoFrameAllocator::init(&mut boot_info.memory_regions) };
+        memory::buddy::BuddyAllocator::new(&boot_info.memory_regions, phys_mem_offset.as_u64());
 
     allocator::init_heap(&mut mapper, &mut frame_allocator).expect("Heap init failed");
     println!("Heap init done");

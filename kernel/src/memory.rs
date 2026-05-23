@@ -1,4 +1,5 @@
-use bootloader_api::info::{MemoryRegionKind, MemoryRegions};
+pub mod buddy;
+
 use x86_64::registers::control::Cr3;
 use x86_64::{
     structures::paging::{
@@ -8,45 +9,7 @@ use x86_64::{
     PhysAddr, VirtAddr,
 };
 
-/// A FrameAllocator that returns usable frames from the bootloader's memory map.
-pub struct BootInfoFrameAllocator {
-    memory_regions: &'static mut [bootloader_api::info::MemoryRegion],
-    next: usize,
-}
-
-impl BootInfoFrameAllocator {
-    /// # Safety
-    /// Create a FrameAllocator from the passed memory regions.
-    ///
-    /// This function is unsafe because the caller must guarantee that the passed
-    /// memory regions are valid. The main requirement is that all frames that are marked
-    /// as `USABLE` in it are really unused.
-    pub unsafe fn init(memory_regions: &'static mut MemoryRegions) -> Self {
-        BootInfoFrameAllocator {
-            memory_regions: &mut *memory_regions,
-            next: 0,
-        }
-    }
-
-    fn usable_frames(&self) -> impl Iterator<Item = PhysFrame> + use<'_> {
-        let usable_regions = self
-            .memory_regions
-            .iter()
-            .filter(|r| r.kind == MemoryRegionKind::Usable);
-        let frame_addresses = usable_regions.flat_map(|r| (r.start..r.end).step_by(4096));
-        frame_addresses.map(|addr| PhysFrame::containing_address(PhysAddr::new(addr)))
-    }
-}
-
 pub struct EmptyFrameAllocator;
-
-unsafe impl FrameAllocator<Size4KiB> for BootInfoFrameAllocator {
-    fn allocate_frame(&mut self) -> Option<PhysFrame> {
-        let frame = self.usable_frames().nth(self.next);
-        self.next += 1;
-        frame
-    }
-}
 
 pub fn create_example_mapping(
     page: Page,
