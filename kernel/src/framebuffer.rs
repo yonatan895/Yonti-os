@@ -158,6 +158,11 @@ impl FrameBufferWriter {
             EscapeState::Normal => match byte {
                 0x1b => self.escape_state = EscapeState::SawEsc,
                 b'\n' => self.new_line(),
+                0x08 => {
+                    if self.x_pos >= CHAR_WIDTH {
+                        self.x_pos -= CHAR_WIDTH;
+                    }
+                }
                 byte => {
                     if self.x_pos + CHAR_WIDTH > self.info.width {
                         self.new_line();
@@ -199,7 +204,7 @@ impl FrameBufferWriter {
     pub fn write_string(&mut self, s: &str) {
         for byte in s.bytes() {
             match byte {
-                0x20..=0x7e | b'\n' | 0x1b => self.write_byte(byte),
+                0x20..=0x7e | b'\n' | 0x08 | 0x1b => self.write_byte(byte),
                 _ => self.write_byte(0xfe),
             }
         }
@@ -283,7 +288,8 @@ impl fmt::Write for FrameBufferWriter {
 static FRAMEBUFFER: Mutex<Option<FrameBufferWriter>> = Mutex::new(None);
 
 pub fn init(buffer: &'static mut [u8], info: FrameBufferInfo) {
-    let writer = FrameBufferWriter::new(buffer, info);
+    let mut writer = FrameBufferWriter::new(buffer, info);
+    writer.clear_screen();
     *FRAMEBUFFER.lock() = Some(writer);
 }
 
