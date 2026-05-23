@@ -85,6 +85,35 @@ cargo deny check
 (cd runner && cargo deny check)
 ```
 
+## Branching and PR workflow
+
+Always work on a new branch off `master`. Never push directly to `master`,
+reuse old branches whose PRs were already merged, or force-push.
+
+```sh
+# Starting new work
+git checkout master
+git pull origin master
+git checkout -b feature/<description>    # or fix/<description>
+
+# Make changes, verify locally
+cargo fmt --all -- && (cd runner && cargo fmt --)
+./run_tests.sh
+
+# Push and create PR
+git add -A
+git commit -m "type: description"
+git push origin feature/<description>
+gh pr create --base master --title "..." --body "..."
+```
+
+Branch naming conventions:
+- `feature/<description>` — new functionality
+- `fix/<description>` — bug fixes
+- `refactor/<description>` — code restructuring
+- `ci/<description>` — CI/CD changes
+- `docs/<description>` — documentation
+
 ## Architecture
 
 ### Build pipeline

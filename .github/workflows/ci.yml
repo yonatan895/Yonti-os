@@ -92,6 +92,12 @@ jobs:
       - name: Build test-runner
         run: cargo build --no-default-features --bin test-runner
         working-directory: runner
+      - name: Upload boot images
+        uses: actions/upload-artifact@v4
+        with:
+          name: boot-images
+          path: runner/target/boot-images/
+          retention-days: 7
       - name: Run tests
         run: |
           export CI=true

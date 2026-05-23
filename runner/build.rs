@@ -32,6 +32,13 @@ fn main() {
         .create_uefi_image(&uefi_img)
         .unwrap();
 
+    // Copy to predictable paths for CI artifact uploads
+    let artifacts_dir =
+        PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").unwrap()).join("target/boot-images");
+    std::fs::create_dir_all(&artifacts_dir).unwrap();
+    std::fs::copy(&bios_img, artifacts_dir.join("bios.img")).unwrap();
+    std::fs::copy(&uefi_img, artifacts_dir.join("uefi.img")).unwrap();
+
     println!("cargo:rustc-env=BIOS_IMG={}", bios_img.display());
     println!("cargo:rustc-env=UEFI_IMG={}", uefi_img.display());
 }
