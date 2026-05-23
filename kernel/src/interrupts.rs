@@ -1,3 +1,4 @@
+use crate::apic;
 use crate::monitor;
 use crate::pic::ChainedPics;
 use crate::trace::TraceEventId;
@@ -25,7 +26,7 @@ pub enum InterruptIndex {
 }
 
 impl InterruptIndex {
-    fn as_u8(self) -> u8 {
+    pub fn as_u8(self) -> u8 {
         self as u8
     }
 }
@@ -57,9 +58,15 @@ extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStac
     monitor::inc_interrupt(InterruptIndex::Keyboard.as_u8());
     crate::task::keyboard::add_scancode(scancode);
 
-    unsafe {
-        PICS.lock()
-            .notify_end_of_interrupt(InterruptIndex::Keyboard.as_u8());
+    if apic::is_active() {
+        unsafe {
+            apic::end_of_interrupt();
+        }
+    } else {
+        unsafe {
+            PICS.lock()
+                .notify_end_of_interrupt(InterruptIndex::Keyboard.as_u8());
+        }
     }
 }
 
@@ -71,9 +78,15 @@ extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFr
         InterruptIndex::Timer.as_u8() as u64
     );
 
-    unsafe {
-        PICS.lock()
-            .notify_end_of_interrupt(InterruptIndex::Timer.as_u8());
+    if apic::is_active() {
+        unsafe {
+            apic::end_of_interrupt();
+        }
+    } else {
+        unsafe {
+            PICS.lock()
+                .notify_end_of_interrupt(InterruptIndex::Timer.as_u8());
+        }
     }
 }
 

@@ -117,4 +117,41 @@ impl ChainedPics {
             self.pics[0].end_of_interrupt();
         }
     }
+
+    /// Mask (disable) a single IRQ line on the PIC.
+    ///
+    /// `irq` is the hardware IRQ number (0–15).
+    ///
+    /// # Safety
+    ///
+    /// Must be called with interrupts disabled.
+    pub unsafe fn mask_irq(&mut self, irq: u8) {
+        assert!(irq < 16);
+        if irq < 8 {
+            let mut mask = unsafe { self.pics[0].data.read() };
+            mask |= 1 << irq;
+            unsafe {
+                self.pics[0].data.write(mask);
+            }
+        } else {
+            let mut mask = unsafe { self.pics[1].data.read() };
+            mask |= 1 << (irq - 8);
+            unsafe {
+                self.pics[1].data.write(mask);
+            }
+        }
+    }
+
+    /// Mask all IRQ lines so the PIC no longer forwards interrupts.
+    ///
+    /// # Safety
+    ///
+    /// Must be called with interrupts disabled and after the APIC has
+    /// been configured to take over interrupt routing.
+    pub unsafe fn mask_all(&mut self) {
+        unsafe {
+            self.pics[0].data.write(0xFF);
+            self.pics[1].data.write(0xFF);
+        }
+    }
 }

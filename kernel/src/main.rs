@@ -9,8 +9,11 @@ extern crate alloc;
 use bootloader_api::{BootInfo, entry_point};
 use core::panic::PanicInfo;
 use x86_64::VirtAddr;
+use x86_64::instructions::interrupts;
 use yonti_os::allocator;
+use yonti_os::apic;
 use yonti_os::fs;
+use yonti_os::interrupts as interrupts_mod;
 use yonti_os::log;
 use yonti_os::memory;
 use yonti_os::println;
@@ -46,6 +49,10 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     log::info!("heap initialized");
     trace::init();
 
+    unsafe {
+        init_apic(boot_info, phys_mem_offset);
+    }
+
     demo_fs();
     log::info!("filesystem demo done");
 
@@ -65,6 +72,41 @@ async fn async_number() -> u32 {
 async fn example_task() {
     let number = async_number().await;
     println!("async number: {}", number);
+}
+
+unsafe fn init_apic(boot_info: &BootInfo, phys_offset: VirtAddr) {
+    let rsdp_addr = match boot_info.rsdp_addr.into_option() {
+        Some(addr) => addr,
+        None => {
+            log::warn!("ACPI: no RSDP found — using PIC fallback");
+            interrupts::enable();
+            return;
+        }
+    };
+
+    let info = match unsafe { apic::detect(rsdp_addr, phys_offset.as_u64()) } {
+        Some(info) => info,
+        None => {
+            log::warn!("APIC: detection failed — using PIC fallback");
+            interrupts::enable();
+            return;
+        }
+    };
+
+    interrupts::disable();
+
+    let ok = unsafe { apic::init(&info, phys_offset.as_u64()) };
+
+    if ok {
+        unsafe {
+            interrupts_mod::PICS.lock().mask_all();
+        }
+        log::info!("APIC: PIC masked, APIC routing active");
+    } else {
+        log::warn!("APIC: init failed — using PIC fallback");
+    }
+
+    interrupts::enable();
 }
 
 fn demo_fs() {

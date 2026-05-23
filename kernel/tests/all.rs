@@ -6,6 +6,8 @@
 
 extern crate alloc;
 
+#[path = "common/apic.rs"]
+mod apic_tests;
 #[path = "common/array_queue.rs"]
 mod array_queue;
 #[path = "common/basic_boot.rs"]
@@ -22,8 +24,11 @@ mod heap_allocation;
 use bootloader_api::{BootInfo, entry_point};
 use core::panic::PanicInfo;
 use x86_64::VirtAddr;
+use x86_64::instructions::interrupts;
 use yonti_os::allocator;
+use yonti_os::apic;
 use yonti_os::framebuffer;
+use yonti_os::interrupts as interrupts_mod;
 use yonti_os::memory::{self, buddy::BuddyAllocator};
 
 entry_point!(test_kernel_main, config = &yonti_os::BOOTLOADER_CONFIG);
@@ -48,8 +53,42 @@ fn test_kernel_main(boot_info: &'static mut BootInfo) -> ! {
         BuddyAllocator::new(&boot_info.memory_regions, phys_mem_offset.as_u64());
     allocator::init_heap(&mut mapper, &mut frame_allocator).expect("heap initialization failed");
 
+    unsafe {
+        init_apic(boot_info, phys_mem_offset);
+    }
+
     test_main();
     yonti_os::hlt_loop();
+}
+
+unsafe fn init_apic(boot_info: &BootInfo, phys_offset: VirtAddr) {
+    let rsdp_addr = match boot_info.rsdp_addr.into_option() {
+        Some(addr) => addr,
+        None => {
+            interrupts::enable();
+            return;
+        }
+    };
+
+    let info = match unsafe { apic::detect(rsdp_addr, phys_offset.as_u64()) } {
+        Some(info) => info,
+        None => {
+            interrupts::enable();
+            return;
+        }
+    };
+
+    interrupts::disable();
+
+    let ok = unsafe { apic::init(&info, phys_offset.as_u64()) };
+
+    if ok {
+        unsafe {
+            interrupts_mod::PICS.lock().mask_all();
+        }
+    }
+
+    interrupts::enable();
 }
 
 #[panic_handler]
