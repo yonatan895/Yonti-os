@@ -1,0 +1,99 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fmt:
+    name: "fmt"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
+      - name: Check kernel formatting
+        run: cargo fmt --all -- --check
+      - name: Check runner formatting
+        run: |
+          cd runner
+          cargo fmt -- --check
+
+  clippy:
+    name: "clippy"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: clippy, rust-src
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/
+            ~/.cargo/git/
+            target/
+          key: clippy-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: clippy-${{ runner.os }}-
+      - name: Cargo clippy (kernel)
+        run: cargo clippy --target x86_64-unknown-none -- -D warnings
+        working-directory: kernel
+      - name: Cargo clippy (runner)
+        run: cargo clippy -- -D warnings
+        working-directory: runner
+
+  deny:
+    name: "deny"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check workspace dependencies
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check
+      - name: Check runner dependencies
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check
+          arguments: --manifest-path runner/Cargo.toml --config deny.toml
+
+  build-and-test:
+    name: "build + test"
+    needs: [fmt, clippy, deny]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rust-src, llvm-tools-preview
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/
+            ~/.cargo/git/
+            target/
+            runner/target/
+          key: build-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: build-${{ runner.os }}-
+      - name: Install QEMU
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q qemu-system-x86
+      - name: Build kernel
+        run: cargo build --target x86_64-unknown-none
+        working-directory: kernel
+      - name: Build test-runner
+        run: cargo build --bin test-runner
+        working-directory: runner
+      - name: Run tests
+        run: |
+          export CI=true
+          export TIMEOUT=120
+          ./run_tests.sh
