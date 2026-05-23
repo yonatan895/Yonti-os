@@ -13,7 +13,7 @@ use core::panic::PanicInfo;
 use x86_64::VirtAddr;
 use yonti_os::allocator::HEAP_SIZE;
 use yonti_os::framebuffer;
-use yonti_os::memory::{self, BootInfoFrameAllocator};
+use yonti_os::memory::{self, buddy::BuddyAllocator};
 
 entry_point!(main, config = &yonti_os::BOOTLOADER_CONFIG);
 
@@ -33,7 +33,7 @@ fn main(boot_info: &'static mut BootInfo) -> ! {
     );
     let mut mapper = unsafe { memory::init(phys_mem_offset) };
     let mut frame_allocator =
-        unsafe { BootInfoFrameAllocator::init(&mut boot_info.memory_regions) };
+        BuddyAllocator::new(&boot_info.memory_regions, phys_mem_offset.as_u64());
     yonti_os::allocator::init_heap(&mut mapper, &mut frame_allocator)
         .expect("heap initialization failed");
 
