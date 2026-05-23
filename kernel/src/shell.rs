@@ -27,7 +27,6 @@ impl Default for Shell {
 }
 
 impl Shell {
-
     pub fn handle_key(&mut self, key: DecodedKey) {
         match key {
             DecodedKey::Unicode('\n') => {
