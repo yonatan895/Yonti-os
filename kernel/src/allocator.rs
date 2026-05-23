@@ -43,7 +43,9 @@ unsafe impl GlobalAlloc for Locked<TlsfAllocator> {
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        self.lock().free(ptr);
+        unsafe {
+            self.lock().free(ptr);
+        }
         monitor::inc_free(layout.size());
         crate::trace_event!(TraceEventId::Free, layout.size(), ptr as u64);
     }
@@ -62,10 +64,10 @@ unsafe impl GlobalAlloc for Dummy {
 }
 
 use x86_64::{
-    structures::paging::{
-        mapper::MapToError, FrameAllocator, Mapper, Page, PageTableFlags, Size4KiB,
-    },
     VirtAddr,
+    structures::paging::{
+        FrameAllocator, Mapper, Page, PageTableFlags, Size4KiB, mapper::MapToError,
+    },
 };
 
 pub fn init_heap(

@@ -84,19 +84,21 @@ impl TlsfAllocator {
     /// # Safety
     /// Must be called exactly once with a valid, unused memory region.
     pub unsafe fn init(&mut self, heap_start: usize, heap_size: usize) {
-        self.heap_start = heap_start;
-        self.heap_end = heap_start + heap_size;
+        unsafe {
+            self.heap_start = heap_start;
+            self.heap_end = heap_start + heap_size;
 
-        let block = heap_start as *mut BlockHeader;
-        (*block).prev_phys_size = 0;
-        (*block).set(heap_size, true, false);
+            let block = heap_start as *mut BlockHeader;
+            (*block).prev_phys_size = 0;
+            (*block).set(heap_size, true, false);
 
-        let sentinel = (heap_start + heap_size) as *mut BlockHeader;
-        (*sentinel).prev_phys_size = heap_size as u32;
-        (*sentinel).set(0, false, true);
+            let sentinel = (heap_start + heap_size) as *mut BlockHeader;
+            (*sentinel).prev_phys_size = heap_size as u32;
+            (*sentinel).set(0, false, true);
 
-        let node = NonNull::new_unchecked(block);
-        self.insert(node, heap_size);
+            let node = NonNull::new_unchecked(block);
+            self.insert(node, heap_size);
+        }
     }
 
     /// Allocate a block of at least `size` bytes with the given alignment.
@@ -126,40 +128,42 @@ impl TlsfAllocator {
     /// `ptr` must have been returned by a prior `malloc()` call and not
     /// already freed. Passing a null pointer is safe (no-op).
     pub unsafe fn free(&mut self, ptr: *mut u8) {
-        if ptr.is_null() {
-            return;
+        unsafe {
+            if ptr.is_null() {
+                return;
+            }
+            let mut header = (ptr as usize - HEADER_SIZE) as *mut BlockHeader;
+            let mut size = (*header).size();
+            let mut addr = header as usize;
+
+            (*header).mark_free(true);
+
+            // forward coalesce
+            let next_ptr = (addr + size) as *mut BlockHeader;
+            if (next_ptr as usize) < self.heap_end && (*next_ptr).is_free() {
+                self.remove(NonNull::new_unchecked(next_ptr));
+                size += (*next_ptr).size();
+                (*header).set(size, true, (*header).prev_is_free());
+            }
+
+            // backward coalesce
+            if (*header).prev_is_free() {
+                let prev_size = (*header).prev_phys_size as usize;
+                let prev = (addr - prev_size) as *mut BlockHeader;
+                self.remove(NonNull::new_unchecked(prev));
+                size += prev_size;
+                header = prev;
+                addr = prev as usize;
+                (*prev).set(size, true, (*prev).prev_is_free());
+            }
+
+            // update next block
+            let next = (addr + size) as *mut BlockHeader;
+            (*next).prev_phys_size = size as u32;
+            (*next).mark_prev_free(true);
+
+            self.insert(NonNull::new_unchecked(header), size);
         }
-        let mut header = (ptr as usize - HEADER_SIZE) as *mut BlockHeader;
-        let mut size = (*header).size();
-        let mut addr = header as usize;
-
-        (*header).mark_free(true);
-
-        // forward coalesce
-        let next_ptr = (addr + size) as *mut BlockHeader;
-        if (next_ptr as usize) < self.heap_end && (*next_ptr).is_free() {
-            self.remove(NonNull::new_unchecked(next_ptr));
-            size += (*next_ptr).size();
-            (*header).set(size, true, (*header).prev_is_free());
-        }
-
-        // backward coalesce
-        if (*header).prev_is_free() {
-            let prev_size = (*header).prev_phys_size as usize;
-            let prev = (addr - prev_size) as *mut BlockHeader;
-            self.remove(NonNull::new_unchecked(prev));
-            size += prev_size;
-            header = prev;
-            addr = prev as usize;
-            (*prev).set(size, true, (*prev).prev_is_free());
-        }
-
-        // update next block
-        let next = (addr + size) as *mut BlockHeader;
-        (*next).prev_phys_size = size as u32;
-        (*next).mark_prev_free(true);
-
-        self.insert(NonNull::new_unchecked(header), size);
     }
 
     // ── internal helpers ────────────────────────────────────────

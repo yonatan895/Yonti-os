@@ -6,7 +6,7 @@
 
 extern crate alloc;
 
-use bootloader_api::{entry_point, BootInfo};
+use bootloader_api::{BootInfo, entry_point};
 use core::panic::PanicInfo;
 use x86_64::VirtAddr;
 use yonti_os::allocator;
@@ -15,7 +15,7 @@ use yonti_os::log;
 use yonti_os::memory;
 use yonti_os::println;
 use yonti_os::task::keyboard;
-use yonti_os::task::{executor::Executor, Task};
+use yonti_os::task::{Task, executor::Executor};
 use yonti_os::trace;
 
 entry_point!(kernel_main, config = &yonti_os::BOOTLOADER_CONFIG);
@@ -72,10 +72,10 @@ fn demo_fs() {
     fs.create_file("/hello.txt").expect("create /hello.txt");
     fs.write_file("/hello.txt", b"Hello from Yonti-os filesystem!")
         .expect("write /hello.txt");
-    if let Ok(data) = fs.read_file("/hello.txt") {
-        if let Ok(s) = core::str::from_utf8(&data) {
-            println!("[fs] /hello.txt: {}", s);
-        }
+    if let Ok(data) = fs.read_file("/hello.txt")
+        && let Ok(s) = core::str::from_utf8(&data)
+    {
+        println!("[fs] /hello.txt: {}", s);
     }
     fs.create_dir("/home").expect("create /home");
     fs.create_file("/home/test").expect("create /home/test");

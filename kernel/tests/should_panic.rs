@@ -1,9 +1,9 @@
 #![no_std]
 #![no_main]
 
-use bootloader_api::{entry_point, BootInfo};
+use bootloader_api::{BootInfo, entry_point};
 use core::panic::PanicInfo;
-use yonti_os::{exit_qemu, serial_print, serial_println, QemuExitCode};
+use yonti_os::{QemuExitCode, exit_qemu, serial_print, serial_println};
 
 entry_point!(test_kernel_main, config = &yonti_os::BOOTLOADER_CONFIG);
 
