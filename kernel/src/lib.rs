@@ -13,6 +13,7 @@ pub mod fs;
 pub mod gdt;
 pub mod interrupts;
 pub mod memory;
+pub mod pic;
 pub mod serial;
 pub mod sse;
 pub mod task;
