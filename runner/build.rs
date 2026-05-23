@@ -3,7 +3,12 @@ use std::path::PathBuf;
 use std::process::Command;
 
 fn main() {
-    // Build the kernel for the target (must be explicit — runner config overrides)
+    // In lint/check mode, skip the expensive kernel build + disk image creation
+    if std::env::var("SKIP_KERNEL_BUILD").is_ok() {
+        println!("cargo:rustc-env=BIOS_IMG=");
+        println!("cargo:rustc-env=UEFI_IMG=");
+        return;
+    }
     let kernel_dir = PathBuf::from("../kernel");
     let status = Command::new("cargo")
         .current_dir(&kernel_dir)

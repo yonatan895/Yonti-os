@@ -49,7 +49,7 @@ jobs:
           cargo clippy --target x86_64-unknown-none -- -D warnings
         working-directory: kernel
       - name: Cargo clippy (runner)
-        run: cargo clippy --no-default-features -- -D warnings
+        run: SKIP_KERNEL_BUILD=1 cargo clippy --no-default-features -- -D warnings
         working-directory: runner
 
   deny:
