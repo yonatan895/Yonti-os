@@ -11,6 +11,7 @@ use core::panic::PanicInfo;
 use x86_64::VirtAddr;
 use yonti_os::allocator;
 use yonti_os::fs;
+use yonti_os::log;
 use yonti_os::memory;
 use yonti_os::println;
 use yonti_os::task::keyboard;
@@ -25,7 +26,9 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         let buffer = fb.into_buffer();
         yonti_os::framebuffer::init(buffer, info);
     }
-    println!("Framebuffer initialized");
+
+    log::init(log::LevelFilter::Info).expect("logger already set");
+    log::info!("framebuffer initialized");
 
     let phys_mem_offset = VirtAddr::new(
         boot_info
@@ -39,10 +42,10 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         memory::buddy::BuddyAllocator::new(&boot_info.memory_regions, phys_mem_offset.as_u64());
 
     allocator::init_heap(&mut mapper, &mut frame_allocator).expect("Heap init failed");
-    println!("Heap init done");
+    log::info!("heap initialized");
 
     demo_fs();
-    println!("FS demo done");
+    log::info!("filesystem demo done");
 
     #[cfg(test)]
     test_main();

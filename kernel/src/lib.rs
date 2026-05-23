@@ -15,6 +15,7 @@ pub mod framebuffer;
 pub mod fs;
 pub mod gdt;
 pub mod interrupts;
+pub mod log;
 pub mod memory;
 pub mod once_cell;
 pub mod pic;
