@@ -17,9 +17,10 @@ jobs:
     name: "fmt"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@v1
         with:
+          toolchain: nightly
           components: rustfmt
       - name: Check kernel formatting
         run: cargo fmt --all -- --check
@@ -30,11 +31,12 @@ jobs:
     name: "clippy"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@v1
         with:
+          toolchain: nightly
           components: clippy, rust-src
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry/
@@ -56,12 +58,10 @@ jobs:
     name: "deny"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Install cargo-deny
-        run: |
-          URL=$(curl -sSfL https://api.github.com/repos/EmbarkStudios/cargo-deny/releases/latest | grep -oP '"browser_download_url": "\K[^"]*x86_64-unknown-linux-musl\.tar\.gz(?=")')
-          curl -sSfL "$URL" | tar xz --strip-components=1
-          sudo mv cargo-deny /usr/local/bin/
+      - uses: actions/checkout@v6
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
       - name: Check workspace dependencies
         run: cargo deny check
       - name: Check runner dependencies
@@ -73,11 +73,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@v1
         with:
+          toolchain: nightly
           components: rust-src, llvm-tools-preview
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry/
@@ -97,7 +98,7 @@ jobs:
         run: cargo build --tests --target x86_64-unknown-none
         working-directory: kernel
       - name: Upload boot images
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: boot-images
           path: runner/target/boot-images/

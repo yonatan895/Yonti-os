@@ -3,7 +3,12 @@
 //! O(1) worst-case allocation/deallocation. Two-level bitmaps for fast
 //! free-block search, immediate boundary-tag coalescing on free.
 //! MIN_BLOCK_SIZE=32, FL levels cover 32 B to 16 MiB.
+//!
+//! Block sizes are stored as `u32` — the maximum representable block size
+//! is 4 GiB. The heap must not be enlarged beyond this limit without also
+//! widening the size fields.
 
+use crate::allocator::align_up;
 use core::ptr::NonNull;
 
 const HEADER_SIZE: usize = 8;
@@ -31,6 +36,7 @@ impl BlockHeader {
         self.size_and_flags & PREV_FREE_FLAG != 0
     }
     fn set(&mut self, size: usize, free: bool, prev_free: bool) {
+        debug_assert!(size <= u32::MAX as usize, "block size exceeds u32::MAX");
         self.size_and_flags = size as u32
             | if free { FREE_FLAG } else { 0 }
             | if prev_free { PREV_FREE_FLAG } else { 0 };
@@ -57,6 +63,7 @@ struct FreeNode {
     next: Option<NonNull<BlockHeader>>,
 }
 
+#[derive(Debug)]
 pub struct TlsfAllocator {
     heap_start: usize,
     heap_end: usize,
@@ -337,8 +344,4 @@ impl TlsfAllocator {
             }
         }
     }
-}
-
-fn align_up(addr: usize, align: usize) -> usize {
-    (addr + align - 1) & !(align - 1)
 }

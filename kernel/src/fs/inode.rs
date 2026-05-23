@@ -1,34 +1,33 @@
 use alloc::collections::BTreeMap;
-use alloc::string::String;
 use alloc::vec::Vec;
 
 /// A file containing raw byte data, or a directory containing child inodes.
 #[derive(Debug, Clone)]
 pub enum InodeKind {
     File(Vec<u8>),
-    Directory(BTreeMap<String, Inode>),
+    Directory(BTreeMap<&'static str, Inode>),
 }
 
 /// A node in the filesystem tree, either a file or a directory.
 #[derive(Debug, Clone)]
 pub struct Inode {
-    pub name: String,
+    pub name: &'static str,
     pub kind: InodeKind,
 }
 
 impl Inode {
     /// Create a new empty file inode.
-    pub fn new_file(name: &str) -> Self {
+    pub const fn new_file(name: &'static str) -> Self {
         Inode {
-            name: String::from(name),
+            name,
             kind: InodeKind::File(Vec::new()),
         }
     }
 
     /// Create a new empty directory inode.
-    pub fn new_directory(name: &str) -> Self {
+    pub const fn new_directory(name: &'static str) -> Self {
         Inode {
-            name: String::from(name),
+            name,
             kind: InodeKind::Directory(BTreeMap::new()),
         }
     }
@@ -85,9 +84,9 @@ impl Inode {
         }
     }
 
-    pub fn list_children(&self) -> Vec<&String> {
+    pub fn list_children(&self) -> Vec<&'static str> {
         match &self.kind {
-            InodeKind::Directory(children) => children.keys().collect(),
+            InodeKind::Directory(children) => children.keys().copied().collect(),
             InodeKind::File(_) => Vec::new(),
         }
     }

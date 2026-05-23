@@ -1,7 +1,7 @@
 use crate::monitor;
 use crate::pic::ChainedPics;
 use crate::trace::TraceEventId;
-use crate::{gdt, hlt_loop, println};
+use crate::{gdt, println};
 use lazy_static::lazy_static;
 
 use spin::Mutex;
@@ -92,11 +92,12 @@ extern "x86-interrupt" fn page_fault_handler(
     stack_frame: InterruptStackFrame,
     error_code: PageFaultErrorCode,
 ) {
-    println!("EXCEPTION: PAGE FAULT");
-    println!("Accessed Address: {:?}", Cr2::read());
-    println!("Error Code: {:?}", error_code);
-    println!("{:#?}", stack_frame);
-    hlt_loop();
+    panic!(
+        "EXCEPTION: PAGE FAULT\nAccessed Address: {:?}\nError Code: {:?}\n{:#?}",
+        Cr2::read(),
+        error_code,
+        stack_frame,
+    );
 }
 
 #[test_case]

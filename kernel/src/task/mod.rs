@@ -1,4 +1,5 @@
 use alloc::boxed::Box;
+use core::fmt;
 use core::sync::atomic::{AtomicU64, Ordering};
 use core::task::{Context, Poll};
 use core::{future::Future, pin::Pin};
@@ -33,5 +34,13 @@ impl Task {
 
     fn poll(&mut self, context: &mut Context) -> Poll<()> {
         self.future.as_mut().poll(context)
+    }
+}
+
+impl fmt::Debug for Task {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Task")
+            .field("id", &self.id)
+            .finish_non_exhaustive()
     }
 }

@@ -11,11 +11,16 @@ use x86_64::instructions::port::{Port, PortReadOnly, PortWriteOnly};
 const LINE_STS_OUTPUT_EMPTY: u8 = 1 << 5;
 
 macro_rules! wait_for {
-    ($cond:expr) => {
+    ($cond:expr) => {{
+        let mut retries: u32 = 100_000;
         while !$cond {
-            core::hint::spin_loop()
+            retries = retries.saturating_sub(1);
+            if retries == 0 {
+                break;
+            }
+            core::hint::spin_loop();
         }
-    };
+    }};
 }
 
 pub struct SerialPort {
