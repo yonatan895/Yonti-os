@@ -1,6 +1,6 @@
 # AGENTS.md — Yonti-os
 
-Bare-metal x86_64 kernel in Rust.
+Bare-metal x86_64 kernel in Rust. Follows Philipp Oppermann's "Writing an OS in Rust" series.
 
 ## Build requirements
 
