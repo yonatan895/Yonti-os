@@ -35,6 +35,12 @@ pub struct ChainedPics {
 }
 
 impl ChainedPics {
+    /// Create a new chained PIC interface with the given interrupt offsets.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that the PICs are present and not already
+    /// initialized by another driver.
     pub const unsafe fn new(offset1: u8, offset2: u8) -> Self {
         Self {
             pics: [
@@ -52,6 +58,11 @@ impl ChainedPics {
         }
     }
 
+    /// Initialize both PIC controllers with ICW1–ICW4.
+    ///
+    /// # Safety
+    ///
+    /// Must be called only once and before enabling interrupts.
     pub unsafe fn initialize(&mut self) {
         let mut wait_port: Port<u8> = Port::new(0x80);
         let mut wait = || wait_port.write(0);
@@ -89,6 +100,11 @@ impl ChainedPics {
         self.pics[1].data.write(saved_mask2);
     }
 
+    /// Notify the PIC(s) that an interrupt has been handled.
+    ///
+    /// # Safety
+    ///
+    /// Must be called from the interrupt handler for the given `interrupt_id`.
     pub unsafe fn notify_end_of_interrupt(&mut self, interrupt_id: u8) {
         if self.pics[1].handles_interrupt(interrupt_id) {
             self.pics[1].end_of_interrupt();
