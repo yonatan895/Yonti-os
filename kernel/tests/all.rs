@@ -14,6 +14,8 @@ mod basic_boot;
 mod buddy_allocator;
 #[path = "common/file_system.rs"]
 mod file_system;
+#[path = "common/framebuffer.rs"]
+mod framebuffer_tests;
 #[path = "common/heap_allocation.rs"]
 mod heap_allocation;
 
