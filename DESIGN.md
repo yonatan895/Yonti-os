@@ -1,445 +1,307 @@
-# Yonti-os — Build System & Architecture
+# Yonti-os — Build Systems, Architecture & Module Reference
 
-Bare-metal x86_64 kernel in Rust. Two build systems in parallel: **Cargo** (original) and **Bazel** (hermetic). Cargo owns dependency resolution (`Cargo.toml`/`Cargo.lock`); Bazel owns hermetic compilation and testing.
+Bare-metal x86_64 kernel in Rust (edition 2021, nightly, MIT). 20 public modules, 11 tests in 2 QEMU boots, dual build system (Cargo + Bazel).
 
 ---
 
 ## Workspace Structure
 
-```text
+```
 Yonti-os/
-├── Cargo.toml            # Workspace root: members = ["kernel"]
-├── Cargo.lock            # Resolved deps for kernel workspace
-├── MODULE.bazel           # Bazel module: rules_rust, crate_universe
-├── .bazelrc               # Bazel config: --config=bare, --config=host
-├── .bazelversion          # Pinned Bazel 7.4.1
-├── BUILD.bazel            # Root convenience targets (fmt, clippy, deny)
+├── Cargo.toml              # Workspace root: members = ["kernel"]
+├── MODULE.bazel             # Bazel module: rules_rust 0.70.0, crate_universe
+├── .bazelrc                 # Config: --config=bare, --config=host, nightly
+├── .bazelversion            # Pinned Bazel 7.4.1
+├── BUILD.bazel              # Root convenience targets (fmt, clippy, deny)
 ├── platforms/
-│   └── BUILD.bazel        # x86_64_bare_metal, x86_64_linux
+│   └── BUILD.bazel          # x86_64_bare_metal, x86_64_linux
 ├── tools/
-│   ├── BUILD.bazel        # qemu_runner host binary
-│   ├── qemu_test.bzl      # Custom Starlark rule for QEMU tests
-│   ├── qemu_runner.rs     # Wraps kernel ELF → bootable image → QEMU
-│   └── deny.sh            # cargo-deny wrapper
-├── kernel/                # Workspace member: bare-metal kernel
-│   ├── Cargo.toml         # bootloader_api, spin, x86_64, …
-│   ├── .cargo/config.toml # build-std, target = x86_64-unknown-none
-│   ├── BUILD.bazel        # Bazel: rust_library + rust_binary + test ELFs
-│   ├── src/               # Kernel source (lib.rs, main.rs, modules)
-│   └── tests/             # Integration test binaries
-│       ├── all.rs          # Unified test entry (10 tests, 1 boot)
-│       ├── common/         # Test function modules (pure, no entry_point)
-│       ├── should_panic.rs # Standalone (harness=false)
+│   ├── BUILD.bazel          # qemu_runner host binary
+│   ├── qemu_runner.rs       # Wraps kernel ELF → bootable image → QEMU
+│   ├── qemu_test.bzl        # Custom Starlark rule for QEMU kernel tests
+│   └── deny.sh              # cargo-deny wrapper for Bazel
+├── kernel/                  # Workspace member: bare-metal kernel
+│   ├── Cargo.toml           # Deps: bootloader_api, spin, x86_64, log, etc.
+│   ├── .cargo/config.toml   # build-std, target = x86_64-unknown-none
+│   ├── BUILD.bazel          # rust_library + rust_binary + test ELFs
+│   ├── src/
+│   │   ├── lib.rs           # Crate root, init(), test framework, QEMU exit
+│   │   ├── main.rs          # kernel_main: boot, heap, FS demo, executor
+│   │   ├── allocator.rs     # Global allocator (TLSF), Locked<A>
+│   │   ├── allocator/       # tlsf.rs, bump.rs, fixed_size_block.rs, linked_list.rs
+│   │   ├── memory.rs        # OffsetPageTable init, EmptyFrameAllocator
+│   │   ├── memory/buddy.rs  # Buddy physical frame allocator
+│   │   ├── uart.rs          # UART 16550 driver (replaces uart_16550 crate)
+│   │   ├── pic.rs           # 8259 PIC driver (replaces pic8259 crate)
+│   │   ├── serial.rs        # serial_print! / serial_println! macros
+│   │   ├── vga_buffer.rs    # println! / print! macros (serial + framebuffer)
+│   │   ├── framebuffer.rs   # Pixel text renderer, 8×16 font
+│   │   ├── font.rs          # Auto-generated bitmap font (96 glyphs)
+│   │   ├── gdt.rs           # GDT/TSS (bootloader provides)
+│   │   ├── interrupts.rs    # IDT, PIC handlers: timer, keyboard, exceptions
+│   │   ├── sse.rs           # SSE enablement via CR0/CR4
+│   │   ├── task/mod.rs      # Task struct, TaskId
+│   │   ├── task/executor.rs # Async executor (BTreeMap, ArrayQueue, HLT idle)
+│   │   ├── task/keyboard.rs # Async scancode stream via AtomicWaker + ArrayQueue
+│   │   ├── array_queue.rs   # Lock-free SPSC ring buffer (replaces crossbeam-queue)
+│   │   ├── async_utils.rs   # Stream, StreamExt, AtomicWaker (replaces futures-util)
+│   │   ├── once_cell.rs     # OnceCell (replaces conquer-once)
+│   │   ├── fs/mod.rs        # Hierarchical in-memory filesystem
+│   │   ├── fs/inode.rs      # Inode, InodeKind (File, Directory)
+│   │   ├── log.rs           # Structured logging via log crate facade
+│   │   ├── monitor.rs       # Lock-free atomic metrics (alloc, task, interrupt)
+│   │   ├── trace.rs         # 4096-entry execution tracing ring buffer
+│   │   └── debug.rs         # Crash diagnostics: registers, stack trace, hexdump
+│   └── tests/
+│       ├── all.rs           # Unified test entry (10 tests, 1 boot)
+│       ├── common/          # Test function modules (no entry_point)
+│       ├── should_panic.rs  # Standalone panic-expected test
 │       └── stack_overflow.rs
-├── runner/                # Standalone Cargo workspace (NOT a Bazel member)
-│   ├── Cargo.toml         # [workspace], bootloader, ovmf-prebuilt
-│   ├── .cargo/            # target = x86_64-unknown-linux-gnu
-│   ├── build.rs           # Builds kernel + creates BIOS/UEFI disk images
+├── runner/                  # Standalone Cargo workspace (NOT a Bazel member)
+│   ├── Cargo.toml           # [workspace], bootloader, ovmf-prebuilt (optional)
+│   ├── build.rs             # Builds kernel, creates BIOS/UEFI disk images
 │   └── src/
-│       ├── main.rs         # QEMU launcher (bios/uefi modes)
-│       └── test_runner.rs  # Wraps test ELF → bootable image → QEMU
+│       ├── main.rs          # QEMU launcher (bios/uefi modes)
+│       └── test_runner.rs   # Wraps test ELF → bootable image → QEMU
 ├── .github/workflows/
-│   └── ci.yml             # CI: fmt, clippy, deny, build-and-test
-├── deny.toml              # cargo-deny config (advisories, licenses, bans)
-├── run_tests.sh           # Build (Bazel) + test (Cargo test-runner)
-└── AGENTS.md              # Agent guidance
-```text
+│   ├── ci.yml               # Main CI: fmt, clippy, deny, build-and-test
+│   ├── markdown-lint.yml    # Markdown lint for .md-only PRs
+│   └── opencode.yml         # AI assistant trigger
+├── deny.toml                # cargo-deny config (advisories, licenses, bans)
+├── run_tests.sh             # Build + test (Bazel ELFs locally, Cargo in CI)
+└── AGENTS.md                # Agent guidance + coding principles
+```
 
 ---
 
-## Cargo Build System (Original)
+## Build Systems
 
-### Kernel compilation (`kernel/`)
+### Cargo (primary, used in CI)
 
-```text
-┌──────────────────────────────────────────────────────────┐
-│ kernel/.cargo/config.toml                                │
-│   [build] target = "x86_64-unknown-none"                 │
-│   [unstable] build-std = ["core","compiler_builtins",    │
-│                            "alloc"]                      │
-└─────────────────┬────────────────────────────────────────┘
-                  │
-                  ▼
-         ┌───────────────┐
-         │  cargo build   │  →  target/x86_64-unknown-none/
-         │  --target      │      debug/yonti_os (ELF)
-         │  x86_64-       │
-         │  unknown-none  │
-         └───────────────┘
-```text
+Two separate Cargo workspaces:
 
-- **`build-std`**: Compiles `core`, `compiler_builtins`, and `alloc` from source for the bare-metal target. This replaces the standard library.
-- **Target**: `x86_64-unknown-none` — a built-in Rust target for freestanding x86_64.
-- **Panic strategy**: `panic = "abort"` (set in workspace `Cargo.toml` profiles).
+| Workspace | Directory | Target | Key Config |
+|-----------|-----------|--------|------------|
+| Kernel | `kernel/` | `x86_64-unknown-none` | `build-std = ["core", "compiler_builtins", "alloc"]`, `panic = "abort"` |
+| Runner | `runner/` | `x86_64-unknown-linux-gnu` | `[workspace]` (separate), `--no-default-features` in CI |
 
-### Runner compilation (`runner/`)
+**Kernel dependencies** (15 crates in lock file):
+`bootloader_api` 0.11, `x86_64` 0.15, `spin` 0.9 (`spin_mutex`, `once`, `lock_api`), `lazy_static` 1.0 (`spin_no_std`), `pc-keyboard` 0.5, `linked_list_allocator` 0.10, `log` 0.4 (no_std, info max).
 
-```text
-┌────────────────────────────────────────────┐
-│ runner/.cargo/config.toml                  │
-│   [build] target = "x86_64-unknown-        │
-│                      linux-gnu"            │
-└─────────────┬──────────────────────────────┘
-              │
-              ▼
-     ┌─────────────────┐
-     │  cargo build     │ ──build.rs──→ builds kernel ELF
-     │  --bin runner    │               creates BIOS/UEFI images
-     │  --bin test-     │               via DiskImageBuilder
-     │      runner      │
-     └─────────────────┘
-```text
+**Runner dependencies** (30–110 crates):
+`bootloader` 0.11 (build + runtime), `ovmf-prebuilt` 0.2 (optional, `uefi` feature). Feature-gated: `--no-default-features` in CI drops ~80 transitive crates.
 
-`runner/build.rs` is a build script that:
+### Bazel (local dev, hermetic)
 
-1. Invokes `cargo build --target x86_64-unknown-none` from `../kernel` to build the kernel ELF
-2. Calls `DiskImageBuilder::new(kernel_elf).create_bios_image(path)` to produce a bootable disk image
-3. Calls `DiskImageBuilder::new(kernel_elf).create_uefi_image(path)` for UEFI
-4. Copies images to `runner/target/boot-images/` for CI artifact uploads
-5. Exports `BIOS_IMG` and `UEFI_IMG` environment variables for the `runner` binary
+- **rules_rust** 0.70.0, Bazel 7.4.1, nightly pinned to `2026-05-21`
+- Toolchain: `extra_rustc_flags = ["-C", "linker=rust-lld"]`
+- `crate.from_cargo()` bridges Cargo.lock → Bazel deps (two separate calls for kernel + runner)
+- Platforms: `x86_64_bare_metal` (`@platforms//os:none`) and `x86_64_linux`
+- Bazel is NOT used in CI — Cargo is faster with proven caching; Bazel is for local development
 
-### Dependency resolution
-
-All dependencies flow through `Cargo.toml` → `Cargo.lock`. The kernel has 15 crates in its lock file (post-dependency-reduction), the runner has 30–110 depending on whether the `uefi` feature is enabled.
+**Usage:**
+```sh
+bazel build --config=bare //kernel:yonti_os         # kernel ELF
+bazel build --config=bare //kernel:all_tests_elf    # test ELFs
+bazel build //:fmt                                   # format check
+bazel build //:clippy                                # clippy check
+```
 
 ---
 
-## Bazel Build System (New)
+## Kernel Module Reference (20 public modules)
 
-### Motivation
+### Core Infrastructure (5)
 
-Bazel provides:
+| Module | LOC | Purpose |
+|--------|-----|---------|
+| `lib.rs` | 130 | Crate root, `BOOTLOADER_CONFIG`, `init()` (SSE/IDT/PIC), test framework, QEMU exit |
+| `main.rs` | 105 | `kernel_main`: boot sequence, FS demo, executor spawn |
+| `gdt.rs` | 54 | GDT/TSS setup (bootloader 0.11 provides by default) |
+| `interrupts.rs` | 114 | IDT, keyboard/timer/page-fault handlers, PIC EOI |
+| `sse.rs` | 23 | SSE enablement via CR0/CR4 registers |
 
-- **Hermetic builds**: Rust toolchain downloaded by Bazel, no host `rustup` needed
-- **Reproducible**: pinned Bazel version + pinned nightly Rust
-- **Advanced caching**: remote cache support, fine-grained incremental builds
-- **Unified operations**: `bazel build`, `bazel test`, `bazel run` for everything
+### Memory Management (6)
 
-### Toolchain setup (`MODULE.bazel`)
+| Module | LOC | Purpose |
+|--------|-----|---------|
+| `memory.rs` | 49 | `OffsetPageTable` init, `EmptyFrameAllocator` |
+| `memory/buddy.rs` | 299 | Buddy frame allocator (4 KiB–4 MiB, bitmap, deallocation) |
+| `allocator.rs` | 104 | `#[global_allocator]`, `Locked<A>`, `init_heap()` |
+| `allocator/tlsf.rs` | 338 | TLSF heap (O(1), 19×32 classes, coalescing, alignment support) |
+| `allocator/bump.rs` | 64 | Bump allocator (reference) |
+| `allocator/fixed_size_block.rs` | 103 | Fixed-size block allocator (reference) |
+| `allocator/linked_list.rs` | 148 | Linked-list allocator (reference) |
 
-```python
-rust.toolchain(
-    edition = "2021",
-    versions = ["nightly/2026-05-21"],
-    extra_target_triples = [
-        "x86_64-unknown-none",       # bare-metal kernel
-        "x86_64-unknown-linux-gnu",  # host (runner tools)
-    ],
-)
-```text
+### I/O & Display (6)
 
-- **Hermetic Rust**: Bazel downloads `rustc`, `rust-std`, and `llvm-tools` from `static.rust-lang.org`. No `-Zbuild-std` needed — prebuilt `core`/`alloc` for `x86_64-unknown-none` is fetched automatically.
-- **Pinned nightly**: `nightly/2026-05-21` — matches the `rust-toolchain.toml` version.
+| Module | LOC | Purpose |
+|--------|-----|---------|
+| `uart.rs` | 107 | UART 16550 driver (replaces `uart_16550` crate) |
+| `pic.rs` | 114 | 8259 PIC driver (replaces `pic8259` crate) |
+| `serial.rs` | 41 | `serial_print!` macros, serial port init |
+| `vga_buffer.rs` | 18 | `println!`/`print!` macros (serial + framebuffer) |
+| `framebuffer.rs` | 150 | Pixel text renderer, scrolling, RGB/BGR |
+| `font.rs` | 108 | 8×16 VGA font (96 glyphs, 1536 bytes) |
 
-### Dependency bridging (`crate.from_cargo()`)
+### Async Runtime (5)
 
-Bazel reads `Cargo.toml`/`Cargo.lock` via `crate_universe` and generates Bazel BUILD files:
+| Module | LOC | Purpose |
+|--------|-----|---------|
+| `task/mod.rs` | 35 | `Task` struct, `TaskId` atomic counter |
+| `task/executor.rs` | 111 | Async executor: `BTreeMap`, `ArrayQueue`, HLT idle |
+| `task/keyboard.rs` | 86 | Async scancode stream, interrupt-safe |
+| `array_queue.rs` | 81 | Lock-free SPSC ring buffer (replaces `crossbeam-queue`) |
+| `async_utils.rs` | 91 | `Stream`, `StreamExt`, `AtomicWaker` with interrupt guard (replaces `futures-util`) |
+| `once_cell.rs` | 61 | `OnceCell` (replaces `conquer-once`) |
 
-```text
-Cargo.toml / Cargo.lock
-        │
-        ▼ crate.from_cargo()
-┌───────────────────┐     ┌────────────────────┐
-│ @crates_kernel    │     │ @crates_runner     │
-│ (15 crates)       │     │ (30-110 crates)    │
-├───────────────────┤     ├────────────────────┤
-│ bootloader_api    │     │ bootloader         │
-│ x86_64            │     │ ovmf-prebuilt      │
-│ spin              │     │ fatfs, gpt, mbrman │
-│ lazy_static       │     │ ureq, rustls, ring │
-│ pc-keyboard       │     │ tempfile, serde    │
-│ linked_list_alloc │     │ …                  │
-│ lock_api          │     │                    │
-│ …                │     │                    │
-└───────────────────┘     └────────────────────┘
-```text
+### Filesystem (2)
 
-**Important**: The kernel and runner are **separate Cargo workspaces**. Crate_universe requires separate `from_cargo()` calls for each. On any `Cargo.lock` change, run `CARGO_BAZEL_REPIN=1 bazel build …` to regenerate.
+| Module | LOC | Purpose |
+|--------|-----|---------|
+| `fs/mod.rs` | 156 | Hierarchical in-memory FS, `lazy_static` global `FS` |
+| `fs/inode.rs` | 94 | `Inode`, `InodeKind` (File/Directory), BTreeMap children |
 
-### Platform constraints (`platforms/BUILD.bazel`)
+### Observability (4)
 
-Two Bazel platforms defined:
-
-- `x86_64_bare_metal` — `@platforms//os:none` + `@platforms//cpu:x86_64`
-- `x86_64_linux` — `@platforms//os:linux` + `@platforms//cpu:x86_64`
-
-Used via `--config=bare` or `--config=host` in `.bazelrc`.
-
-### Kernel targets (`kernel/BUILD.bazel`)
-
-```text
-                      ┌───────────────────────────┐
-                      │       yonti_os_lib        │
-                      │  (rust_library, bare-     │
-                      │   metal, crate_name=      │
-                      │   "yonti_os")             │
-                      │  srcs = lib.rs + all      │
-                      │  modules                  │
-                      └───────────┬───────────────┘
-                                  │
-              ┌───────────────────┼───────────────────┐
-              │                   │                   │
-              ▼                   ▼                   ▼
-     ┌──────────────┐   ┌──────────────────┐  ┌───────────────┐
-     │  yonti_os    │   │ yonti_os_lib_test│  │should_panic   │
-     │ (binary,     │   │ (library, bare,  │  │  _elf         │
-     │  main.rs →   │   │  --cfg test      │  │ (binary, bare,│
-     │  kernel ELF) │   │  --cfg bazel)    │  │  depends on   │
-     └──────────────┘   └────────┬─────────┘  │  yonti_os_lib)│
-                                 │             └───────────────┘
-                                 ▼
-                        ┌───────────────┐
-                        │ all_tests_elf │
-                        │ (binary, bare,│
-                        │  --test,      │
-                        │  tests/all.rs │
-                        │  + common/)   │
-                        └───────────────┘
-```text
-
-**`--cfg bazel` guard**: In `lib.rs`, the Cargo test harness (`entry_point!`, `test_kernel_main`, `panic_handler`) is gated behind `#[cfg(all(test, not(bazel)))]`. This allows Bazel to compile `yonti_os_lib_test` with `--cfg test` (enabling the public test API: `test_runner`, `QemuExitCode`, etc.) **without** also compiling the library's own entry point. The test binary (`all_tests_elf`) provides its own entry point in `tests/all.rs`.
-
-### Convenience targets (`BUILD.bazel`)
-
-| Target | Command | What it does |
-|--------|---------|-------------|
-| `//:fmt` | `bazel build //:fmt` | Runs `rustfmt` aspect over `yonti_os_lib` |
-| `//:clippy` | `bazel build //:clippy` | Runs `clippy` aspect over `yonti_os_lib` |
-| `//:deny` | `bazel run //:deny` | Runs `cargo-deny check` for both workspaces |
+| Module | LOC | Purpose |
+|--------|-----|---------|
+| `log.rs` | 69 | Structured logging via `log` crate (error→trace levels) |
+| `monitor.rs` | 186 | Lock-free atomic counters: alloc, frames, tasks, interrupts |
+| `trace.rs` | 140 | 4096-entry ring buffer, RDTSC timestamps, `trace_event!` macro |
+| `debug.rs` | 140 | Register dump (16 GPRs + CR0–CR4), RBP-chain stack trace, crash dump, hexdump |
 
 ---
 
 ## Unified Test Binary
 
-### Design
+Tests are split into two QEMU boots:
 
-Tests are split into two categories:
+| Binary | Tests | Boot Mechanism |
+|--------|-------|----------------|
+| `all_tests_elf` | 10 (basic_boot 1, heap 4, fs 5) | Shared framebuffer + heap + TLSF init, runs all `#[test_case]` fns |
+| `should_panic_elf` | 1 | Standalone, `harness=false`, expects kernel panic |
+| `stack_overflow` | 1 | Skipped by default (triggers real stack overflow, flaky) |
 
-| Category | Binary | Boots | Tests | Mechanism |
-|----------|--------|-------|-------|-----------|
-| **Unified** | `all_tests_elf` | 1 boot | 10 tests | Custom test framework, shared init |
-| **Panic-expected** | `should_panic_elf` | 1 boot | 1 test | Standalone binary, `harness=false` |
+**Before unification:** 4 separate binaries → 4 QEMU boots, ~93s.
+**After unification:** 2 binaries → 2 QEMU boots, ~49s (47% faster).
 
-**Before unification**: 4 separate test binaries (basic_boot, heap_allocation, file_system, should_panic) → 4 QEMU boots, ~93s total.
+### Test flow
 
-**After unification**: 2 binaries (all_tests_elf, should_panic_elf) → 2 QEMU boots, ~49s total (47% faster).
-
-### How it works
-
-```text
-tests/all.rs                              tests/common/
-├── #![no_main]                           ├── basic_boot.rs     (test_println)
-├── #![feature(custom_test_frameworks)]   ├── heap_allocation.rs (4 tests)
-├── entry_point!(test_kernel_main, …)     └── file_system.rs    (5 tests)
-├── fn test_kernel_main(...) {
-│       yonti_os::init();           // PIC, IDT, SSE once
-│       framebuffer::init(...);     // framebuffer once
-│       BuddyAllocator::new(...);   // frame allocator once
-│       init_heap(...);             // TLSF heap once
-│       test_main();                // runs ALL #[test_case] fns
-│   }
-└── #[panic_handler]
-```text
-
-The test entry point does **maximum initialization** (framebuffer + heap) once, then `test_main()` (generated by `custom_test_frameworks`) runs all 10 `#[test_case]` functions sequentially. The shared heap means all allocations (Box, Vec, file system data) coexist — tests use non-overlapping paths to isolate their data.
-
-### `should_panic` remains standalone
-
-`should_panic` cannot share a boot because it **expects a kernel panic** (it tests that `assert_eq!(0, 1)` causes the panic handler to fire). The panic handler exits QEMU with success code 33. Including this in the unified binary would terminate before other tests run.
+```
+run_tests.sh
+  ├─ bazel build --config=bare //kernel:all_tests_elf     (local) OR
+  │  cargo build --tests --target x86_64-unknown-none      (CI)
+  ├─ cargo build --no-default-features --bin test-runner
+  └─ for each ELF:
+       test-runner <elf> → DiskImageBuilder → BIOS image → QEMU
+       (isa-debug-exit: 33=pass, 35=fail)
+```
 
 ---
 
-## QEMU Test Infrastructure
+## CI Pipeline
 
-### Flow
+Triggered on PRs to `master` (not on merge). Markdown-only PRs skip this pipeline.
 
-```text
-┌──────────────┐     ┌─────────────────┐     ┌──────────┐
-│ Kernel ELF   │ ──→ │ DiskImageBuilder│ ──→ │ BIOS img │
-│ (all_tests   │     │ (bootloader     │     │ (in tmp) │
-│  _elf)       │     │  crate)         │     │          │
-└──────────────┘     └─────────────────┘     └────┬─────┘
-                                                  │
-                                                  ▼
-                                           ┌────────────┐
-                                           │  QEMU      │
-                                           │  -no-      │
-                                           │  graphic   │
-                                           │  -no-      │
-                                           │  reboot    │
-                                           │  -device   │
-                                           │  isa-debug-│
-                                           │  exit      │
-                                           └──────┬─────┘
-                                                  │
-                                          exit code 33/35
-                                                  │
-                                                  ▼
-                                          ┌──────────────┐
-                                          │ test_runner  │
-                                          │ maps: 33 → 0 │
-                                          │       35 → 1 │
-                                          └──────────────┘
-```text
-
-### Current test execution
-
-The `test-runner` binary (compiled by Cargo from `runner/src/test_runner.rs`) uses `DiskImageBuilder` from the `bootloader` crate to wrap a kernel ELF into a bootable BIOS disk image. It then spawns QEMU with `-device isa-debug-exit,iobase=0xf4,iosize=0x04` — the kernel writes 0x10 (success) or 0x11 (failure) to port 0xF4, which QEMU maps to exit codes 33 or 35.
-
-**Transitional note**: The `bootloader` crate's build script (`build.rs`) compiles bootloader stages via Cargo internally, which doesn't work under Bazel yet. For now, Bazel builds kernel ELFs and the Cargo-built `test-runner` executes them. The Bazel-native `tools/qemu_runner.rs` is written but blocked on this limitation.
-
-### Test runner script (`run_tests.sh`)
-
-```sh
-# Build kernel ELFs with Bazel
-bazel build --config=bare //kernel:all_tests_elf //kernel:should_panic_elf
-
-# Build test-runner with Cargo (one-time)
-cargo build --no-default-features --bin test-runner
-
-# Run each ELF in QEMU via test-runner
-test-runner bazel-bin/kernel/all_tests_elf     # 10 tests, 1 boot
-test-runner bazel-bin/kernel/should_panic_elf  # 1 test, 1 boot
-```text
-
----
-
-## CI Pipeline (`.github/workflows/ci.yml`)
-
-Triggered only on PRs to `master` (no duplicate run on merge). Branch protection requires all checks to pass.
-
-Four jobs:
-
-```text
-┌──────┐  ┌────────┐  ┌──────┐
-│ fmt   │  │ clippy │  │ deny │   ← parallel, fast gates
-└──┬───┘  └───┬─────┘  └──┬───┘
-   │           │           │
-   └───────────┼───────────┘
-               │
-      ┌────────▼─────────┐
-      │  build-and-test  │   ← sequential, gated
-      └──────────────────┘
-```text
-
-| Job | Tech | What it checks |
-|-----|------|---------------|
-| `fmt` | Cargo | `cargo fmt --check` for kernel + runner |
-| `clippy` | Cargo | `cargo clippy -- -D warnings` for both, kernel pre-built to warm runner cache |
+| Job | Technology | Check |
+|-----|-----------|-------|
+| `fmt` | Cargo | `cargo fmt --check` kernel + runner |
+| `clippy` | Cargo | Kernel: `cargo clippy --target x86_64-unknown-none -- -D warnings`. Runner: `SKIP_KERNEL_BUILD=1 cargo clippy --no-default-features -- -D warnings` |
 | `deny` | cargo-deny | Advisories, licenses, bans for both workspaces |
-| `build-and-test` | Cargo | `cargo build` kernel + runner + test ELFs, QEMU runs all tests |
+| `build-and-test` | Cargo + QEMU | Build runner + test ELFs, upload boot images artifact, 11 tests in 2 boots |
 
-### Caching
-
-- **Cargo**: `~/.cargo/registry/`, `~/.cargo/git/`, `target/`, `runner/target/`
-- **Keys**: `hashFiles('**/Cargo.lock')`
-
-### Markdown-only PRs
-
-PRs that change only `.md` files skip the full pipeline. A separate `markdown-lint.yml` workflow runs `markdownlint-cli2` instead.
-
-### Branch protection
-
-- `master` requires PR + all status checks to pass before merge
-- CI runs only on `pull_request` — no duplicate run on merge commit
+**Caching:** Shared `cargo-*` key. Paths: `~/.cargo/registry/`, `~/.cargo/git/`, `target/`, `runner/target/`.
 
 ---
 
 ## Boot Process
 
-```text
-QEMU starts
-    │
-    ▼
-SeaBIOS → loads bootloader stage 1 (MBR)
-    │
-    ▼
-Bootloader stages 2–4:
-    • Sets up page tables, GDT, identity-maps physical memory
-    • Parses kernel ELF, loads segments
-    • Creates framebuffer mapping
-    • Jumps to kernel entry point
-    │
-    ▼
-kernel_main() in src/main.rs:
-    1. yonti_os::init()        → SSE, IDT, PIC, enable interrupts
-    2. framebuffer::init()     → pixel-based text renderer
-    3. BuddyAllocator::new()   → physical frame allocator
-    4. init_heap()             → map 257 pages, init TLSF heap
-    5. demo_fs()               → in-memory filesystem demo
-    6. Executor::run()         → async task executor
-       ├── keyboard task       → prints keystrokes
-       └── HLT idle            → sleep when no tasks ready
-```text
-
-### Exit mechanism
-
-The kernel writes a value to port `0xF4` (isa-debug-exit device). QEMU interprets this as:
-
-- **0x10** → QEMU exit code 33 (test success)
-- **0x11** → QEMU exit code 35 (test failure)
-
-The test runner maps these to Unix exit codes 0 and 1.
+```
+QEMU → SeaBIOS → Bootloader stages 2–4
+  → kernel_main()
+    → yonti_os::init()              SSE, IDT, PIC, enable interrupts
+    → framebuffer::init()           pixel text renderer (white on black)
+    → log::init(LevelFilter::Info)  structured logging to serial
+    → BuddyAllocator::new()         physical frame allocator (from memory map)
+    → init_heap()                   map 257 pages, init TLSF at 0x4444_4444_0000
+    → trace::init()                 event ring buffer
+    → demo_fs()                     create files/dirs, write/read data
+    → Executor::run()               async tasks (keyboard + example), HLT idle
+```
 
 ---
 
 ## Memory Layout
 
-```text
+```
 Virtual address space:
-  0x0000_0000_0000  ─┬─ Kernel code + data (loaded by bootloader)
-                      │
-  0x4444_4444_0000  ─┬─ HEAP_START
-                      │   TLSF allocator, 1 MiB + 1 sentinel page
-  0x4444_4454_1000  ─┘   (257 × 4 KiB pages mapped via buddy allocator)
-                      │
-  Physical memory:    │  Identity-mapped at bootloader-provided offset
-  0x0000_0000_0000  ─┬─ Buddy allocator manages usable frames
-                      │  MAX_ORDER = 10 (4 KiB to 4 MiB blocks)
-```text
+  0x0000_0000_0000    Kernel code + data (loaded by bootloader)
+  0x4444_4444_0000    HEAP_START — TLSF heap, 1 MiB + sentinel page
+  0x4444_4454_1000    End of mapped heap region (257 pages)
+
+Physical memory:
+  Buddy allocator manages usable frames (MAX_ORDER=10, 4 KiB–4 MiB)
+  MAX_TRACKED_FRAMES: 131,072 (512 MiB RAM)
+  NULL_LINK = usize::MAX (sentinel for free-list links)
+```
 
 ---
 
-## Dependency Graph (Kernel)
+## Dependency Graph (Kernel, 15 crates)
 
-```text
-yonti_os_lib
-├── bootloader_api 0.11.15   entry_point! macro, BootInfo, FrameBuffer
-├── x86_64 0.15.4            Port I/O, paging (OffsetPageTable), IDT, GDT
-├── spin 0.9.8               Mutex, Once (synchronization)
-├── lazy_static 1.5.0        Static initialization (SERIAL1, PICS, FS, IDT)
-├── pc-keyboard 0.5.1        Scancode → key event decoding
-├── linked_list_allocator 0.10.2  Heap fallback (fixed_size_block.rs)
-├── bit_field 0.10           (transitive, x86_64)
-├── bitflags 2.11            (transitive, x86_64)
-├── volatile 0.4             (transitive, x86_64)
-├── lock_api 0.4             (transitive, spin)
-├── scopeguard 1.2           (transitive, lock_api)
-├── spinning_top 0.2         (transitive, linked_list_allocator)
+```
+yonti_os (root)
+├── bootloader_api 0.11      entry_point!, BootInfo, FrameBufferInfo
+├── x86_64 0.15              port I/O, paging, IDT, GDT
+│   ├── bit_field, bitflags, volatile
+├── spin 0.9                 Mutex, Once
+│   ├── lock_api, scopeguard
+├── lazy_static 1.0          Static initialization
+├── pc-keyboard 0.5          Scancode decoding
+├── linked_list_allocator 0.10  Heap fallback
+│   └── spinning_top
+├── log 0.4                  Log facade (no_std, info max)
 ├── const_fn 0.4             (proc-macro, build-time)
 └── rustversion 1.0          (proc-macro, build-time)
 
-Inline modules (no external deps):
-├── kernel/src/uart.rs       (replaces uart_16550 crate, uses x86_64 Ports)
-├── kernel/src/pic.rs        (replaces pic8259 crate, uses x86_64 Ports)
-├── kernel/src/array_queue.rs (replaces crossbeam-queue, uses alloc + atomics)
-├── kernel/src/async_utils.rs (replaces futures-util, uses core::task)
-└── kernel/src/once_cell.rs   (replaces conquer-once, uses core::sync::atomic)
+Inline modules (replaced external crates):
+  uart.rs ← uart_16550     pic.rs ← pic8259
+  array_queue.rs ← crossbeam-queue (+4 transitive)
+  async_utils.rs ← futures-util (+4 transitive)
+  once_cell.rs ← conquer-once (+1 transitive)
 
-Total: 15 crates in Cargo.lock (down from 32 after dependency reduction)
-```text
+Net reduction: 32 → 15 crates (53% fewer)
+```
+
+---
+
+## Key Design Decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| Dual build system | Bazel for hermetic local dev; Cargo for CI (faster caching, no cold start) |
+| Separate runner workspace | Runner is host target; must not inherit kernel's `build-std` config |
+| TLSF as global allocator | O(1) guarantee, better fragmentation than fixed-size block allocator |
+| Buddy frame allocator | Enables frame deallocation (prerequisite for slab allocator) |
+| Inline driver modules | Eliminated 17 crates, zero duplicate versions |
+| Unified test binary | 4 QEMU boots → 2 (93s → 49s, 47% faster) |
+| Observability pipeline | log → monitor → trace → debug, each builds on the prior |
+| `--cfg bazel` guard in lib.rs | Bazel compiles library with test API but without entry_point |
+| AtomicWaker interrupt guard | `without_interrupts()` prevents ISR/task data race |
+| buddy NULL_LINK = usize::MAX | Frame index 0 is valid; zero sentinel would truncate free lists |
 
 ---
 
 ## Quick Reference
 
-| Operation | Cargo | Bazel (local dev) |
-|-----------|-------|-------------------|
+| Operation | Cargo | Bazel (local) |
+|-----------|-------|---------------|
 | Build kernel | `cd kernel && cargo build --target x86_64-unknown-none` | `bazel build --config=bare //kernel:yonti_os` |
 | Build test ELFs | `cargo build --tests --target x86_64-unknown-none` | `bazel build --config=bare //kernel:all_tests_elf` |
 | Run all tests | `./run_tests.sh` | `./run_tests.sh` |
+| Run single test | `./run_tests.sh all` | same |
 | Format check | `cargo fmt --all -- --check` | `bazel build //:fmt` |
-| Clippy check | `cargo clippy -- -D warnings` | `bazel build //:clippy` |
+| Clippy check | `cd kernel && cargo clippy --target x86_64-unknown-none -- -D warnings` | `bazel build //:clippy` |
 | Deny check | `cargo deny check` | `bazel run //:deny` |
-| Repin deps | `cargo update` | `CARGO_BAZEL_REPIN=1 bazel build //kernel:yonti_os_lib` |
 | Clean | `cargo clean` | `bazel clean` |
