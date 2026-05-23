@@ -14,7 +14,7 @@ harness = false
 
 [dependencies]
 bootloader_api = "0.11.15"
-spin = { version = "0.9.8", default-features = false, features = ["spin_mutex", "once", "lock_api"] }
+spin = { version = "0.9.8", default-features = false, features = ["spin_mutex", "rwlock", "once", "lock_api"] }
 x86_64 = "0.15.4"
 pc-keyboard = "0.9.0"
 linked_list_allocator = "0.10.6"

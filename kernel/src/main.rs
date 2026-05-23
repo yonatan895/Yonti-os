@@ -68,7 +68,7 @@ async fn example_task() {
 }
 
 fn demo_fs() {
-    let mut fs = fs::FS.lock();
+    let mut fs = fs::FS.write();
     fs.create_file("/hello.txt").expect("create /hello.txt");
     fs.write_file("/hello.txt", b"Hello from Yonti-os filesystem!")
         .expect("write /hello.txt");

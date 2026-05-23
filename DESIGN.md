@@ -1,6 +1,6 @@
 # Yonti-os — Build Systems, Architecture & Module Reference
 
-Bare-metal x86_64 kernel in Rust (edition 2021, nightly, MIT). 20 public modules, 11 tests in 2 QEMU boots, dual build system (Cargo + Bazel).
+Bare-metal x86_64 kernel in Rust (edition 2021, nightly, MIT). 20 public modules, 11 tests in 2 QEMU boots, Cargo build system.
 
 ---
 
@@ -9,21 +9,7 @@ Bare-metal x86_64 kernel in Rust (edition 2021, nightly, MIT). 20 public modules
 ```
 Yonti-os/
 ├── Cargo.toml              # Workspace root: members = ["kernel"]
-├── MODULE.bazel             # Bazel module: rules_rust 0.70.0, crate_universe
-├── .bazelrc                 # Config: --config=bare, --config=host, nightly
-├── .bazelversion            # Pinned Bazel 7.4.1
-├── BUILD.bazel              # Root convenience targets (fmt, clippy, deny)
-├── platforms/
-│   └── BUILD.bazel          # x86_64_bare_metal, x86_64_linux
-├── tools/
-│   ├── BUILD.bazel          # qemu_runner host binary
-│   ├── qemu_runner.rs       # Wraps kernel ELF → bootable image → QEMU
-│   ├── qemu_test.bzl        # Custom Starlark rule for QEMU kernel tests
-│   └── deny.sh              # cargo-deny wrapper for Bazel
 ├── kernel/                  # Workspace member: bare-metal kernel
-│   ├── Cargo.toml           # Deps: bootloader_api, spin, x86_64, log, etc.
-│   ├── .cargo/config.toml   # build-std, target = x86_64-unknown-none
-│   ├── BUILD.bazel          # rust_library + rust_binary + test ELFs
 │   ├── src/
 │   │   ├── lib.rs           # Crate root, init(), test framework, QEMU exit
 │   │   ├── main.rs          # kernel_main: boot, heap, FS demo, executor
@@ -67,7 +53,7 @@ Yonti-os/
 │   ├── ci.yml               # Main CI: fmt, clippy, deny, build-and-test
 │   └── opencode.yml         # AI assistant trigger
 ├── deny.toml                # cargo-deny config (advisories, licenses, bans)
-├── run_tests.sh             # Build + test (Bazel ELFs locally, Cargo in CI)
+├── run_tests.sh             # Build + test script
 └── AGENTS.md                # Agent guidance + coding principles
 ```
 
@@ -90,21 +76,7 @@ Two separate Cargo workspaces:
 **Runner dependencies** (30–110 crates):
 `bootloader` 0.11 (build + runtime), `ovmf-prebuilt` 0.2 (optional, `uefi` feature). Feature-gated: `--no-default-features` in CI drops ~80 transitive crates.
 
-### Bazel (local dev, hermetic)
 
-- **rules_rust** 0.70.0, Bazel 7.4.1, nightly pinned to `2026-05-21`
-- Toolchain: `extra_rustc_flags = ["-C", "linker=rust-lld"]`
-- `crate.from_cargo()` bridges Cargo.lock → Bazel deps (two separate calls for kernel + runner)
-- Platforms: `x86_64_bare_metal` (`@platforms//os:none`) and `x86_64_linux`
-- Bazel is NOT used in CI — Cargo is faster with proven caching; Bazel is for local development
-
-**Usage:**
-```sh
-bazel build --config=bare //kernel:yonti_os         # kernel ELF
-bazel build --config=bare //kernel:all_tests_elf    # test ELFs
-bazel build //:fmt                                   # format check
-bazel build //:clippy                                # clippy check
-```
 
 ---
 
@@ -189,8 +161,7 @@ Tests are split into two QEMU boots:
 
 ```
 run_tests.sh
-  ├─ bazel build --config=bare //kernel:all_tests_elf     (local) OR
-  │  cargo build --tests --target x86_64-unknown-none      (CI)
+  ├─ cargo build --tests --target x86_64-unknown-none
   ├─ cargo build --no-default-features --bin test-runner
   └─ for each ELF:
        test-runner <elf> → DiskImageBuilder → BIOS image → QEMU
@@ -279,8 +250,7 @@ Net reduction: 32 → 15 crates (53% fewer)
 
 | Decision | Rationale |
 |----------|-----------|
-| Dual build system | Bazel for hermetic local dev; Cargo for CI (faster caching, no cold start) |
-| Separate runner workspace | Runner is host target; must not inherit kernel's `build-std` config |
+
 | TLSF as global allocator | O(1) guarantee, better fragmentation than fixed-size block allocator |
 | Buddy frame allocator | Enables frame deallocation (prerequisite for slab allocator) |
 | Inline driver modules | Eliminated 17 crates, zero duplicate versions |
@@ -294,13 +264,13 @@ Net reduction: 32 → 15 crates (53% fewer)
 
 ## Quick Reference
 
-| Operation | Cargo | Bazel (local) |
-|-----------|-------|---------------|
-| Build kernel | `cd kernel && cargo build --target x86_64-unknown-none` | `bazel build --config=bare //kernel:yonti_os` |
-| Build test ELFs | `cargo build --tests --target x86_64-unknown-none` | `bazel build --config=bare //kernel:all_tests_elf` |
-| Run all tests | `./run_tests.sh` | `./run_tests.sh` |
-| Run single test | `./run_tests.sh all` | same |
-| Format check | `cargo fmt --all -- --check` | `bazel build //:fmt` |
-| Clippy check | `cd kernel && cargo clippy --target x86_64-unknown-none -- -D warnings` | `bazel build //:clippy` |
-| Deny check | `cargo deny check` | `bazel run //:deny` |
-| Clean | `cargo clean` | `bazel clean` |
+| Operation | Cargo |
+|-----------|-------|
+| Build kernel | `cd kernel && cargo build --target x86_64-unknown-none` |
+| Build test ELFs | `cargo build --tests --target x86_64-unknown-none` |
+| Run all tests | `./run_tests.sh` |
+| Run single test | `./run_tests.sh all` |
+| Format check | `cargo fmt --all -- --check` |
+| Clippy check | `cd kernel && cargo clippy --target x86_64-unknown-none -- -D warnings` |
+| Deny check | `cargo deny check` |
+| Clean | `cargo clean` |

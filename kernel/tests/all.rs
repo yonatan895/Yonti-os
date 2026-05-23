@@ -6,8 +6,12 @@
 
 extern crate alloc;
 
+#[path = "common/array_queue.rs"]
+mod array_queue;
 #[path = "common/basic_boot.rs"]
 mod basic_boot;
+#[path = "common/buddy_allocator.rs"]
+mod buddy_allocator;
 #[path = "common/file_system.rs"]
 mod file_system;
 #[path = "common/heap_allocation.rs"]

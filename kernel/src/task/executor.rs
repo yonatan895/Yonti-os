@@ -8,7 +8,6 @@ use core::task::{Context, Poll, Waker};
 pub struct Executor {
     tasks: BTreeMap<TaskId, Task>,
     task_queue: Arc<ArrayQueue<TaskId>>,
-    waker_cache: BTreeMap<TaskId, Waker>,
 }
 
 impl Executor {
@@ -16,12 +15,12 @@ impl Executor {
         Executor {
             tasks: BTreeMap::new(),
             task_queue: Arc::new(ArrayQueue::new(100)),
-            waker_cache: BTreeMap::new(),
         }
     }
 
-    pub fn spawn(&mut self, task: Task) {
+    pub fn spawn(&mut self, mut task: Task) {
         let task_id = task.id;
+        task.waker = Some(TaskWaker::create_waker(task_id, self.task_queue.clone()));
         if self.tasks.insert(task.id, task).is_some() {
             panic!("task with same ID already in tasks");
         }
@@ -31,26 +30,19 @@ impl Executor {
 
     fn run_ready_tasks(&mut self) {
         // destructure `self` to avoid borrow checker errors
-        let Self {
-            tasks,
-            task_queue,
-            waker_cache,
-        } = self;
+        let Self { tasks, task_queue } = self;
 
         while let Ok(task_id) = task_queue.pop() {
             let task = match tasks.get_mut(&task_id) {
                 Some(task) => task,
                 None => continue, // task no longer exists
             };
-            let waker = waker_cache
-                .entry(task_id)
-                .or_insert_with(|| TaskWaker::create_waker(task_id, task_queue.clone()));
-            let mut context = Context::from_waker(waker);
+            let waker = task.waker.as_ref().unwrap().clone();
+            let mut context = Context::from_waker(&waker);
             match task.poll(&mut context) {
                 Poll::Ready(()) => {
-                    // task done -> remove it and its cached waker
+                    // task done -> remove it
                     tasks.remove(&task_id);
-                    waker_cache.remove(&task_id);
                     monitor::inc_task_completed();
                 }
                 Poll::Pending => {}

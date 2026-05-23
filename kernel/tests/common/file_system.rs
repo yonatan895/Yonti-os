@@ -1,6 +1,6 @@
 #[test_case]
 fn create_and_read_file() {
-    let mut fs = yonti_os::fs::FS.lock();
+    let mut fs = yonti_os::fs::FS.write();
     fs.create_file("/test.txt").expect("create /test.txt");
     fs.write_file("/test.txt", b"Hello, world!")
         .expect("write /test.txt");
@@ -10,7 +10,7 @@ fn create_and_read_file() {
 
 #[test_case]
 fn create_and_list_directory() {
-    let mut fs = yonti_os::fs::FS.lock();
+    let mut fs = yonti_os::fs::FS.write();
     fs.create_dir("/mydir").expect("create /mydir");
     fs.create_file("/mydir/a").expect("create /mydir/a");
     fs.create_file("/mydir/b").expect("create /mydir/b");
@@ -22,7 +22,7 @@ fn create_and_list_directory() {
 
 #[test_case]
 fn append_to_file() {
-    let mut fs = yonti_os::fs::FS.lock();
+    let mut fs = yonti_os::fs::FS.write();
     fs.create_file("/append.txt").expect("create /append.txt");
     fs.write_file("/append.txt", b"first").expect("write first");
     fs.append_file("/append.txt", b"second")
@@ -33,7 +33,7 @@ fn append_to_file() {
 
 #[test_case]
 fn file_exists_and_nonexistent() {
-    let mut fs = yonti_os::fs::FS.lock();
+    let mut fs = yonti_os::fs::FS.write();
     fs.create_file("/real.txt").expect("create /real.txt");
     assert!(fs.exists("/real.txt"));
     assert!(!fs.exists("/nope.txt"));
@@ -41,7 +41,7 @@ fn file_exists_and_nonexistent() {
 
 #[test_case]
 fn nested_paths() {
-    let mut fs = yonti_os::fs::FS.lock();
+    let mut fs = yonti_os::fs::FS.write();
     fs.create_dir("/a").expect("create /a");
     fs.create_dir("/a/b").expect("create /a/b");
     fs.create_file("/a/b/c.txt").expect("create /a/b/c.txt");
@@ -51,7 +51,7 @@ fn nested_paths() {
 
 #[test_case]
 fn delete_file_and_directory() {
-    let mut fs = yonti_os::fs::FS.lock();
+    let mut fs = yonti_os::fs::FS.write();
     fs.create_file("/todelete.txt")
         .expect("create /todelete.txt");
     assert!(fs.exists("/todelete.txt"));
@@ -69,7 +69,7 @@ fn delete_file_and_directory() {
 
 #[test_case]
 fn invalid_dot_paths() {
-    let mut fs = yonti_os::fs::FS.lock();
+    let mut fs = yonti_os::fs::FS.write();
     assert!(fs.create_file("/.").is_err());
     assert!(fs.create_file("/..").is_err());
     assert!(fs.create_dir("/.").is_err());
