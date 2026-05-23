@@ -28,6 +28,12 @@ pub struct SerialPort {
 }
 
 impl SerialPort {
+    /// Create a new serial port at the given I/O base address.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that the given base address points to a
+    /// valid UART 16550 device.
     pub const unsafe fn new(base: u16) -> Self {
         Self {
             data: Port::new(base),

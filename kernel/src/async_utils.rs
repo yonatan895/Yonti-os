@@ -60,6 +60,7 @@ pub struct AtomicWaker {
 }
 
 impl AtomicWaker {
+    #[allow(clippy::new_without_default)]
     pub const fn new() -> Self {
         Self {
             waker: UnsafeCell::new(None),
