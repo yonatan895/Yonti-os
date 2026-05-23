@@ -33,6 +33,9 @@ struct MonitorData {
 
     // Timer (updated by timer ISR)
     timer_ticks: AtomicU64,
+
+    // Executor (wake drops)
+    dropped_wakes: AtomicU64,
 }
 
 impl MonitorData {
@@ -49,6 +52,7 @@ impl MonitorData {
             active_tasks: AtomicUsize::new(0),
             interrupt_counts: [const { AtomicU64::new(0) }; 16],
             timer_ticks: AtomicU64::new(0),
+            dropped_wakes: AtomicU64::new(0),
         }
     }
 }
@@ -124,6 +128,12 @@ pub fn uptime_ticks() -> u64 {
     MONITOR.timer_ticks.load(Ordering::Relaxed)
 }
 
+// ── Executor ───────────────────────────────────────────────────────
+
+pub fn inc_dropped_wake() {
+    MONITOR.dropped_wakes.fetch_add(1, Ordering::Relaxed);
+}
+
 // ── Snapshot ──────────────────────────────────────────────────────
 
 #[derive(Debug)]
@@ -139,6 +149,7 @@ pub struct MetricsSnapshot {
     pub active_tasks: usize,
     pub interrupt_counts: [u64; 16],
     pub timer_ticks: u64,
+    pub dropped_wakes: u64,
 }
 
 pub fn snapshot() -> MetricsSnapshot {
@@ -159,12 +170,13 @@ pub fn snapshot() -> MetricsSnapshot {
         active_tasks: MONITOR.active_tasks.load(Ordering::Relaxed),
         interrupt_counts: irq_counts,
         timer_ticks: MONITOR.timer_ticks.load(Ordering::Relaxed),
+        dropped_wakes: MONITOR.dropped_wakes.load(Ordering::Relaxed),
     }
 }
 
 pub fn dump_to_serial(metrics: &MetricsSnapshot) {
     log::info!(
-        "metrics: alloc={} free={} cur={} peak={} frames={}/{} tasks={}/{}/{} ticks={}",
+        "metrics: alloc={} free={} cur={} peak={} frames={}/{} tasks={}/{}/{} drops={} ticks={}",
         metrics.alloc_count,
         metrics.free_count,
         metrics.current_allocated,
@@ -174,6 +186,7 @@ pub fn dump_to_serial(metrics: &MetricsSnapshot) {
         metrics.tasks_spawned,
         metrics.tasks_completed,
         metrics.active_tasks,
+        metrics.dropped_wakes,
         metrics.timer_ticks,
     );
 

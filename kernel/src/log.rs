@@ -40,9 +40,16 @@ impl Log for KernelLogger {
         if !self.enabled(record.metadata()) {
             return;
         }
-        // Output format: [LEVEL] module_path: message\n
+        let color = match record.level() {
+            log::Level::Error => "31",
+            log::Level::Warn => "33",
+            log::Level::Info => "37",
+            log::Level::Debug => "36",
+            log::Level::Trace => "35",
+        };
         serial::_print(format_args!(
-            "[{:<5}] {}: {}\n",
+            "\x1b[{}m[{:<5}]\x1b[0m {}: {}\n",
+            color,
             record.level(),
             record.target(),
             record.args(),

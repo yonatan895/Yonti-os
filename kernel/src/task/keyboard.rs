@@ -8,6 +8,8 @@ use core::{
 };
 use pc_keyboard::{DecodedKey, HandleControl, PS2Keyboard, ScancodeSet1, layouts};
 
+const MAX_SCANCODES: usize = 100;
+
 static WAKER: AtomicWaker = AtomicWaker::new();
 static SCANCODE_QUEUE: OnceCell<ArrayQueue<u8>> = OnceCell::uninit();
 
@@ -53,7 +55,7 @@ pub struct ScancodeStream {
 impl ScancodeStream {
     pub fn new() -> Self {
         SCANCODE_QUEUE
-            .try_init_once(|| ArrayQueue::new(100))
+            .try_init_once(|| ArrayQueue::new(MAX_SCANCODES))
             .expect("ScancodeStream::new should only be called once");
         ScancodeStream { _private: () }
     }
