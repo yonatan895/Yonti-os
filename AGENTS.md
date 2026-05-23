@@ -49,7 +49,7 @@ PRs to `master` are gated by four jobs (PR-only, no duplicate on merge):
 | `deny` | `cargo deny check` both workspaces |
 | `build-and-test` | Full Cargo build + `./run_tests.sh` (11 tests) |
 
-Markdown-only PRs skip the full pipeline and run `markdownlint-cli2` instead.
+Markdown-only PRs skip all CI checks — they require only a human review.
 
 ### Local pre-push checklist
 
@@ -156,7 +156,7 @@ Yonti-os/                      # workspace root
 │   └── src/
 │       ├── main.rs            # QEMU launcher (bios/uefi modes)
 │       └── test_runner.rs     # wraps test ELF → bootable image → QEMU
-├── .github/workflows/         # ci.yml, markdown-lint.yml, opencode.yml
+├── .github/workflows/         # ci.yml, opencode.yml
 ├── deny.toml                  # cargo-deny configuration
 ├── run_tests.sh               # convenience test script
 ├── DESIGN.md                  # architecture & build system reference

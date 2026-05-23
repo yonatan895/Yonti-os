@@ -65,7 +65,6 @@ Yonti-os/
 │       └── test_runner.rs   # Wraps test ELF → bootable image → QEMU
 ├── .github/workflows/
 │   ├── ci.yml               # Main CI: fmt, clippy, deny, build-and-test
-│   ├── markdown-lint.yml    # Markdown lint for .md-only PRs
 │   └── opencode.yml         # AI assistant trigger
 ├── deny.toml                # cargo-deny config (advisories, licenses, bans)
 ├── run_tests.sh             # Build + test (Bazel ELFs locally, Cargo in CI)
