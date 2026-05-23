@@ -6,7 +6,7 @@ Bare-metal x86_64 kernel in Rust. Two build systems in parallel: **Cargo** (orig
 
 ## Workspace Structure
 
-```
+```text
 Yonti-os/
 ├── Cargo.toml            # Workspace root: members = ["kernel"]
 ├── Cargo.lock            # Resolved deps for kernel workspace
@@ -43,7 +43,7 @@ Yonti-os/
 ├── deny.toml              # cargo-deny config (advisories, licenses, bans)
 ├── run_tests.sh           # Build (Bazel) + test (Cargo test-runner)
 └── AGENTS.md              # Agent guidance
-```
+```text
 
 ---
 
@@ -51,7 +51,7 @@ Yonti-os/
 
 ### Kernel compilation (`kernel/`)
 
-```
+```text
 ┌──────────────────────────────────────────────────────────┐
 │ kernel/.cargo/config.toml                                │
 │   [build] target = "x86_64-unknown-none"                 │
@@ -66,7 +66,7 @@ Yonti-os/
          │  x86_64-       │
          │  unknown-none  │
          └───────────────┘
-```
+```text
 
 - **`build-std`**: Compiles `core`, `compiler_builtins`, and `alloc` from source for the bare-metal target. This replaces the standard library.
 - **Target**: `x86_64-unknown-none` — a built-in Rust target for freestanding x86_64.
@@ -74,7 +74,7 @@ Yonti-os/
 
 ### Runner compilation (`runner/`)
 
-```
+```text
 ┌────────────────────────────────────────────┐
 │ runner/.cargo/config.toml                  │
 │   [build] target = "x86_64-unknown-        │
@@ -88,9 +88,10 @@ Yonti-os/
      │  --bin test-     │               via DiskImageBuilder
      │      runner      │
      └─────────────────┘
-```
+```text
 
 `runner/build.rs` is a build script that:
+
 1. Invokes `cargo build --target x86_64-unknown-none` from `../kernel` to build the kernel ELF
 2. Calls `DiskImageBuilder::new(kernel_elf).create_bios_image(path)` to produce a bootable disk image
 3. Calls `DiskImageBuilder::new(kernel_elf).create_uefi_image(path)` for UEFI
@@ -108,6 +109,7 @@ All dependencies flow through `Cargo.toml` → `Cargo.lock`. The kernel has 15 c
 ### Motivation
 
 Bazel provides:
+
 - **Hermetic builds**: Rust toolchain downloaded by Bazel, no host `rustup` needed
 - **Reproducible**: pinned Bazel version + pinned nightly Rust
 - **Advanced caching**: remote cache support, fine-grained incremental builds
@@ -124,7 +126,7 @@ rust.toolchain(
         "x86_64-unknown-linux-gnu",  # host (runner tools)
     ],
 )
-```
+```text
 
 - **Hermetic Rust**: Bazel downloads `rustc`, `rust-std`, and `llvm-tools` from `static.rust-lang.org`. No `-Zbuild-std` needed — prebuilt `core`/`alloc` for `x86_64-unknown-none` is fetched automatically.
 - **Pinned nightly**: `nightly/2026-05-21` — matches the `rust-toolchain.toml` version.
@@ -133,7 +135,7 @@ rust.toolchain(
 
 Bazel reads `Cargo.toml`/`Cargo.lock` via `crate_universe` and generates Bazel BUILD files:
 
-```
+```text
 Cargo.toml / Cargo.lock
         │
         ▼ crate.from_cargo()
@@ -150,13 +152,14 @@ Cargo.toml / Cargo.lock
 │ lock_api          │     │                    │
 │ …                │     │                    │
 └───────────────────┘     └────────────────────┘
-```
+```text
 
 **Important**: The kernel and runner are **separate Cargo workspaces**. Crate_universe requires separate `from_cargo()` calls for each. On any `Cargo.lock` change, run `CARGO_BAZEL_REPIN=1 bazel build …` to regenerate.
 
 ### Platform constraints (`platforms/BUILD.bazel`)
 
 Two Bazel platforms defined:
+
 - `x86_64_bare_metal` — `@platforms//os:none` + `@platforms//cpu:x86_64`
 - `x86_64_linux` — `@platforms//os:linux` + `@platforms//cpu:x86_64`
 
@@ -164,7 +167,7 @@ Used via `--config=bare` or `--config=host` in `.bazelrc`.
 
 ### Kernel targets (`kernel/BUILD.bazel`)
 
-```
+```text
                       ┌───────────────────────────┐
                       │       yonti_os_lib        │
                       │  (rust_library, bare-     │
@@ -192,7 +195,7 @@ Used via `--config=bare` or `--config=host` in `.bazelrc`.
                         │  tests/all.rs │
                         │  + common/)   │
                         └───────────────┘
-```
+```text
 
 **`--cfg bazel` guard**: In `lib.rs`, the Cargo test harness (`entry_point!`, `test_kernel_main`, `panic_handler`) is gated behind `#[cfg(all(test, not(bazel)))]`. This allows Bazel to compile `yonti_os_lib_test` with `--cfg test` (enabling the public test API: `test_runner`, `QemuExitCode`, etc.) **without** also compiling the library's own entry point. The test binary (`all_tests_elf`) provides its own entry point in `tests/all.rs`.
 
@@ -223,7 +226,7 @@ Tests are split into two categories:
 
 ### How it works
 
-```
+```text
 tests/all.rs                              tests/common/
 ├── #![no_main]                           ├── basic_boot.rs     (test_println)
 ├── #![feature(custom_test_frameworks)]   ├── heap_allocation.rs (4 tests)
@@ -236,7 +239,7 @@ tests/all.rs                              tests/common/
 │       test_main();                // runs ALL #[test_case] fns
 │   }
 └── #[panic_handler]
-```
+```text
 
 The test entry point does **maximum initialization** (framebuffer + heap) once, then `test_main()` (generated by `custom_test_frameworks`) runs all 10 `#[test_case]` functions sequentially. The shared heap means all allocations (Box, Vec, file system data) coexist — tests use non-overlapping paths to isolate their data.
 
@@ -250,7 +253,7 @@ The test entry point does **maximum initialization** (framebuffer + heap) once, 
 
 ### Flow
 
-```
+```text
 ┌──────────────┐     ┌─────────────────┐     ┌──────────┐
 │ Kernel ELF   │ ──→ │ DiskImageBuilder│ ──→ │ BIOS img │
 │ (all_tests   │     │ (bootloader     │     │ (in tmp) │
@@ -277,7 +280,7 @@ The test entry point does **maximum initialization** (framebuffer + heap) once, 
                                           │ maps: 33 → 0 │
                                           │       35 → 1 │
                                           └──────────────┘
-```
+```text
 
 ### Current test execution
 
@@ -297,15 +300,17 @@ cargo build --no-default-features --bin test-runner
 # Run each ELF in QEMU via test-runner
 test-runner bazel-bin/kernel/all_tests_elf     # 10 tests, 1 boot
 test-runner bazel-bin/kernel/should_panic_elf  # 1 test, 1 boot
-```
+```text
 
 ---
 
 ## CI Pipeline (`.github/workflows/ci.yml`)
 
-Four jobs, all must pass before merge:
+Triggered only on PRs to `master` (no duplicate run on merge). Branch protection requires all checks to pass.
 
-```
+Four jobs:
+
+```text
 ┌──────┐  ┌────────┐  ┌──────┐
 │ fmt   │  │ clippy │  │ deny │   ← parallel, fast gates
 └──┬───┘  └───┬─────┘  └──┬───┘
@@ -315,26 +320,34 @@ Four jobs, all must pass before merge:
       ┌────────▼─────────┐
       │  build-and-test  │   ← sequential, gated
       └──────────────────┘
-```
+```text
 
 | Job | Tech | What it checks |
 |-----|------|---------------|
 | `fmt` | Cargo | `cargo fmt --check` for kernel + runner |
-| `clippy` | Cargo | `cargo clippy -- -D warnings` for both |
+| `clippy` | Cargo | `cargo clippy -- -D warnings` for both, kernel pre-built to warm runner cache |
 | `deny` | cargo-deny | Advisories, licenses, bans for both workspaces |
-| `build-and-test` | **Bazel + Cargo** | Bazel builds kernel ELFs, Cargo builds test-runner, QEMU runs all tests |
+| `build-and-test` | Cargo | `cargo build` kernel + runner + test ELFs, QEMU runs all tests |
 
 ### Caching
 
-- **Cargo**: `~/.cargo/registry/`, `~/.cargo/git/`, `runner/target/`
-- **Bazel**: `~/.cache/bazel`
-- **Keys**: `hashFiles('**/Cargo.lock', '**/MODULE.bazel')`
+- **Cargo**: `~/.cargo/registry/`, `~/.cargo/git/`, `target/`, `runner/target/`
+- **Keys**: `hashFiles('**/Cargo.lock')`
+
+### Markdown-only PRs
+
+PRs that change only `.md` files skip the full pipeline. A separate `markdown-lint.yml` workflow runs `markdownlint-cli2` instead.
+
+### Branch protection
+
+- `master` requires PR + all status checks to pass before merge
+- CI runs only on `pull_request` — no duplicate run on merge commit
 
 ---
 
 ## Boot Process
 
-```
+```text
 QEMU starts
     │
     ▼
@@ -357,11 +370,12 @@ kernel_main() in src/main.rs:
     6. Executor::run()         → async task executor
        ├── keyboard task       → prints keystrokes
        └── HLT idle            → sleep when no tasks ready
-```
+```text
 
 ### Exit mechanism
 
 The kernel writes a value to port `0xF4` (isa-debug-exit device). QEMU interprets this as:
+
 - **0x10** → QEMU exit code 33 (test success)
 - **0x11** → QEMU exit code 35 (test failure)
 
@@ -371,7 +385,7 @@ The test runner maps these to Unix exit codes 0 and 1.
 
 ## Memory Layout
 
-```
+```text
 Virtual address space:
   0x0000_0000_0000  ─┬─ Kernel code + data (loaded by bootloader)
                       │
@@ -382,13 +396,13 @@ Virtual address space:
   Physical memory:    │  Identity-mapped at bootloader-provided offset
   0x0000_0000_0000  ─┬─ Buddy allocator manages usable frames
                       │  MAX_ORDER = 10 (4 KiB to 4 MiB blocks)
-```
+```text
 
 ---
 
 ## Dependency Graph (Kernel)
 
-```
+```text
 yonti_os_lib
 ├── bootloader_api 0.11.15   entry_point! macro, BootInfo, FrameBuffer
 ├── x86_64 0.15.4            Port I/O, paging (OffsetPageTable), IDT, GDT
@@ -413,18 +427,17 @@ Inline modules (no external deps):
 └── kernel/src/once_cell.rs   (replaces conquer-once, uses core::sync::atomic)
 
 Total: 15 crates in Cargo.lock (down from 32 after dependency reduction)
-```
+```text
 
 ---
 
 ## Quick Reference
 
-| Operation | Cargo | Bazel |
-|-----------|-------|-------|
-| Build kernel | `cd kernel && cargo build` | `bazel build --config=bare //kernel:yonti_os` |
-| Build test ELFs | `cargo build --tests` | `bazel build --config=bare //kernel:all_tests_elf` |
-| Run all tests | `./run_tests.sh` | `./run_tests.sh` (Bazel ELFs + Cargo runner) |
-| Run single test | `./run_tests.sh should_panic` | same |
+| Operation | Cargo | Bazel (local dev) |
+|-----------|-------|-------------------|
+| Build kernel | `cd kernel && cargo build --target x86_64-unknown-none` | `bazel build --config=bare //kernel:yonti_os` |
+| Build test ELFs | `cargo build --tests --target x86_64-unknown-none` | `bazel build --config=bare //kernel:all_tests_elf` |
+| Run all tests | `./run_tests.sh` | `./run_tests.sh` |
 | Format check | `cargo fmt --all -- --check` | `bazel build //:fmt` |
 | Clippy check | `cargo clippy -- -D warnings` | `bazel build //:clippy` |
 | Deny check | `cargo deny check` | `bazel run //:deny` |

@@ -44,6 +44,7 @@ TIMEOUT=60 ./run_tests.sh
 ```
 
 `run_tests.sh` builds the kernel, builds the `test-runner` binary, then for each test:
+
 1. Compiles the test as a standalone kernel (`cargo build --test <name> --target x86_64-unknown-none`)
 2. Uses `test-runner` to wrap the ELF into a bootable BIOS disk image
 3. Runs it in QEMU with `isa-debug-exit` (exit code 33 = pass, 35 = fail)
@@ -108,6 +109,7 @@ gh pr create --base master --title "..." --body "..."
 ```
 
 Branch naming conventions:
+
 - `feature/<description>` — new functionality
 - `fix/<description>` — bug fixes
 - `refactor/<description>` — code restructuring
@@ -117,12 +119,14 @@ Branch naming conventions:
 ## Architecture
 
 ### Build pipeline
+
 1. `cargo` compiles the kernel ELF for `x86_64-unknown-none` via `build-std` (configured in `kernel/.cargo/config.toml`)
 2. The `runner` crate's `build.rs` wraps the ELF into bootable BIOS and UEFI disk images via `DiskImageBuilder`
 3. QEMU boots the image with `-nographic -device isa-debug-exit,iobase=0xf4,iosize=0x04`
 
 ### Workspace structure
-```
+
+```text
 Yonti-os/                      # workspace root
 ├── Cargo.toml                 # workspace: members = ["kernel"]
 ├── .cargo/config.toml         # [unstable] bindeps = true
@@ -164,14 +168,17 @@ Yonti-os/                      # workspace root
 ```
 
 ### Output routing
+
 `println!` writes to **both** framebuffer and serial port. `serial_println!` writes only to serial. The test framework uses serial output (QEMU `-serial stdio`).
 
 ### Framebuffer
+
 - `FrameBufferWriter` stored in `Mutex<Option<FrameBufferWriter>>` global, initialized at runtime from `boot_info.framebuffer.take()`
 - Supports RGB/BGR pixel formats, 8×16 font, automatic scrolling on newline
 - Before init, `framebuffer::_print` is a no-op
 
 ### Filesystem (`kernel/src/fs/`)
+
 - In-memory only, no disk. All data in `Vec<u8>` on the heap.
 - Global `FS` lazy_static wraps a `spin::Mutex<FileSystem>`.
 - Hierarchical: root `/`, create files/dirs, read/write/append/list.
@@ -186,13 +193,14 @@ Yonti-os/                      # workspace root
 ## Runtime behavior
 
 If the kernel hangs or triple-faults silently, check:
+
 - Missing `#[global_allocator]` init — heap must be initialized before any allocation
 - Page table mappings for heap region — `init_heap` maps pages at `0x4444_4444_0000`
 - Framebuffer init before first `println!` — first `println!` triggers `framebuffer::_print`, but before init it's a no-op; no crash but no output
 
 ## Commit conventions
 
-```
+```text
 type: description
 ```
 

@@ -1,0 +1,16 @@
+# Markdown linting rules for Yonti-os
+default: true
+
+# Allow inline HTML
+MD033: false
+
+# Line length: disabled for code-heavy docs (DESIGN.md, AGENTS.md have long
+# code blocks and architecture diagrams that can't be wrapped)
+MD013: false
+
+# Multiple top-level headings are fine
+MD025: false
+
+# Allow duplicate headings in different sections
+MD024:
+  siblings_only: true

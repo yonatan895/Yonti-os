@@ -1,10 +1,10 @@
 name: CI
 
 on:
-  push:
-    branches: [master]
   pull_request:
     branches: [master]
+    paths-ignore:
+      - '**.md'
 
 permissions:
   contents: read
@@ -40,13 +40,16 @@ jobs:
             ~/.cargo/registry/
             ~/.cargo/git/
             target/
-          key: clippy-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: clippy-${{ runner.os }}-
+            runner/target/
+          key: cargo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: cargo-${{ runner.os }}-
       - name: Cargo clippy (kernel)
-        run: cargo clippy --target x86_64-unknown-none -- -D warnings
+        run: |
+          cargo build --target x86_64-unknown-none
+          cargo clippy --target x86_64-unknown-none -- -D warnings
         working-directory: kernel
       - name: Cargo clippy (runner)
-        run: cargo clippy --no-default-features -- -D warnings
+        run: SKIP_KERNEL_BUILD=1 cargo clippy --no-default-features -- -D warnings
         working-directory: runner
 
   deny:
@@ -74,28 +77,25 @@ jobs:
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: rust-src, llvm-tools-preview
-      - name: Setup Bazel
-        uses: bazelbuild/setup-bazelisk@v3
-        with:
-          bazelisk-version: "1.x"
       - uses: actions/cache@v4
         with:
           path: |
-            ~/.cache/bazel
             ~/.cargo/registry/
             ~/.cargo/git/
+            target/
             runner/target/
-          key: build-${{ runner.os }}-${{ hashFiles('**/Cargo.lock', '**/MODULE.bazel') }}
-          restore-keys: build-${{ runner.os }}-
+          key: cargo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: cargo-${{ runner.os }}-
       - name: Install QEMU
         run: |
           sudo apt-get update -q
           sudo apt-get install -y -q qemu-system-x86
-      - name: Build kernel ELFs (Bazel)
-        run: bazel build --config=bare //kernel:all_tests_elf //kernel:should_panic_elf
-      - name: Build test-runner (Cargo)
+      - name: Build test-runner (also builds kernel ELF via build.rs)
         run: cargo build --no-default-features --bin test-runner
         working-directory: runner
+      - name: Build test ELFs
+        run: cargo build --tests --target x86_64-unknown-none
+        working-directory: kernel
       - name: Upload boot images
         uses: actions/upload-artifact@v4
         with:
