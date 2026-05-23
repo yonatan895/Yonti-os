@@ -19,8 +19,8 @@ rustup component add rust-src llvm-tools-preview --toolchain nightly
 cd kernel && cargo build --target x86_64-unknown-none   # compile kernel
 cd runner && cargo build --no-default-features           # build runner + test-runner
 cd runner && cargo run --bin runner -- bios              # run in QEMU
-./run_tests.sh                                           # all tests (46 tests, 2 boots)
-./run_tests.sh all                                       # unified test (46 tests, 1 boot)
+./run_tests.sh                                           # run all tests
+./run_tests.sh all                                       # run unified test binary
 ```
 
 ## Testing
@@ -29,8 +29,8 @@ Tests are unified into two QEMU boots:
 
 | Binary | Tests | Mechanism |
 |--------|-------|-----------|
-| `all_tests_elf` | 46 (basic_boot 1, heap 7, fs 7, framebuffer 11, buddy 5, array_queue 3, apic 12) | Single entry in `tests/all.rs`, shared init, `custom_test_frameworks` |
-| `should_panic_elf` | 1 | Standalone, `harness=false`, expects kernel panic |
+| `all_tests_elf` | All except `should_panic` | Single entry in `tests/all.rs`, shared init, `custom_test_frameworks` |
+| `should_panic_elf` | Standalone | `harness=false`, expects kernel panic |
 
 `run_tests.sh` builds ELFs (Cargo), then `test-runner` wraps each → BIOS image → QEMU (`isa-debug-exit`: 33=pass, 35=fail).
 
@@ -47,7 +47,7 @@ PRs to `master` are gated by four jobs (PR-only, no duplicate on merge):
 | `fmt` | `cargo fmt --check` kernel + runner |
 | `clippy` | `cargo clippy -- -D warnings` both workspaces |
 | `deny` | `cargo deny check` both workspaces |
-| `build-and-test` | Full Cargo build + `./run_tests.sh` (46 tests) |
+| `build-and-test` | Full Cargo build + `./run_tests.sh` |
 
 Markdown-only PRs skip all CI checks — they require only a human review.
 
@@ -149,7 +149,7 @@ Yonti-os/                      # workspace root
 │   │   ├── fs/mod.rs          # FileSystem (global FS lazy_static)
 │   │   └── fs/inode.rs         # Inode, InodeKind (File | Directory)
 │   └── tests/
-│       ├── all.rs             # unified test entry (46 tests, 1 boot)
+│       ├── all.rs             # unified test entry
 │       ├── common/            # test function modules (apic, array_queue, basic_boot,
 │       │                      #   buddy_allocator, file_system, framebuffer, heap_allocation)
 │       ├── should_panic.rs    # standalone (harness=false)
@@ -184,7 +184,7 @@ Virtual:   TLSF heap at 0x4444_4444_0000 (1 MiB + sentinel page, O(1))
 
 ## Inline driver modules
 
-These replace external crates (32 → 15 in Cargo.lock):
+These replace external crates:
 
 | Module | Replaces | Eliminated |
 |--------|----------|------------|

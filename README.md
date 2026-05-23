@@ -38,7 +38,7 @@ cd runner && cargo run --bin runner -- bios
 ## Test
 
 ```sh
-# Run all tests (11 tests, 2 QEMU boots)
+# Run all tests
 ./run_tests.sh
 
 # Run a single test binary
@@ -89,7 +89,7 @@ PRs to `master` are gated by four checks:
 | `fmt` | `cargo fmt --check` for kernel + runner |
 | `clippy` | `cargo clippy -- -D warnings` for both |
 | `deny` | Security advisories, licenses, bans |
-| `build-and-test` | Build + QEMU integration tests (11 tests, 2 boots) |
+| `build-and-test` | Build + QEMU integration tests |
 
 All jobs use Cargo. PR-only (no duplicate run on merge). Markdown-only PRs skip the full pipeline and run `markdownlint-cli2` instead.
 

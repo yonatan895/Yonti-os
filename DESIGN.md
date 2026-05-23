@@ -1,6 +1,6 @@
 # Yonti-os — Build Systems, Architecture & Module Reference
 
-Bare-metal x86_64 kernel in Rust (edition 2024, nightly, MIT). 22 public modules, 46 tests in 2 QEMU boots, Cargo build system.
+Bare-metal x86_64 kernel in Rust (edition 2024, nightly, MIT). Cargo build system.
 
 ---
 
@@ -43,8 +43,8 @@ Yonti-os/
 │   │   ├── trace.rs         # 4096-entry execution tracing ring buffer
 │   │   └── debug.rs         # Crash diagnostics: registers, stack trace, hexdump
 │   └── tests/
-│       ├── all.rs           # Unified test entry (46 tests, 1 boot)
-│       ├── common/          # Test function modules (7 modules: apic, array_queue,
+│       ├── all.rs           # Unified test entry
+│       ├── common/          # Test function modules (apic, array_queue,
 │       │                    #   basic_boot, buddy_allocator, file_system,
 │       │                    #   framebuffer, heap_allocation)
 │       ├── should_panic.rs  # Standalone panic-expected test
@@ -76,80 +76,80 @@ Two separate Cargo workspaces:
 | Kernel | `kernel/` | `x86_64-unknown-none` | `build-std = ["core", "compiler_builtins", "alloc"]`, `panic = "abort"` |
 | Runner | `runner/` | `x86_64-unknown-linux-gnu` | `[workspace]` (separate), `--no-default-features` in CI |
 
-**Kernel dependencies** (14 crates in lock file):
+**Kernel dependencies**:
 `bootloader_api` 0.11, `x86_64` 0.15, `spin` 0.9 (`spin_mutex`, `once`, `lock_api`), `lazy_static` 1.5 (`spin_no_std`), `pc-keyboard` 0.9, `log` 0.4 (no_std, info max).
 
-**Runner dependencies** (30–110 crates):
-`bootloader` 0.11 (build + runtime), `ovmf-prebuilt` 0.2 (optional, `uefi` feature). Feature-gated: `--no-default-features` in CI drops ~80 transitive crates.
+**Runner dependencies**:
+`bootloader` 0.11 (build + runtime), `ovmf-prebuilt` 0.2 (optional, `uefi` feature). Feature-gated: `--no-default-features` in CI.
 
 
 
 ---
 
-## Kernel Module Reference (22 public modules)
+## Kernel Module Reference
 
-### Core Infrastructure (6)
+### Core Infrastructure
 
-| Module | LOC | Purpose |
-|--------|-----|---------|
-| `lib.rs` | 132 | Crate root, `BOOTLOADER_CONFIG`, `init()` (SSE/IDT/PIC), test framework, QEMU exit |
-| `main.rs` | 105 | `kernel_main`: boot sequence, FS demo, executor spawn |
-| `gdt.rs` | 55 | GDT/TSS + double-fault IST stack via `SyncUnsafeCell` |
-| `interrupts.rs` | 107 | IDT, conditional APIC/PIC EOI dispatch; page fault triggers crash dump via `panic!` |
-| `apic/mod.rs` | 373 | APIC subsystem: inline ACPI MADT parser (~150 LOC), detection, LAPIC+I/O APIC init, IRQ→GSI mapping |
-| `apic/lapic.rs` | 113 | LAPIC MMIO driver (ID, version, SVR enable, EOI at offset 0xB0) |
-| `apic/ioapic.rs` | 132 | I/O APIC MMIO driver (indirect register access, 24-entry redirection table) |
-| `sse.rs` | 25 | SSE enablement via CR0/CR4 registers |
+| Module | Purpose |
+|--------|---------|
+| `lib.rs` | Crate root, `BOOTLOADER_CONFIG`, `init()` (SSE/IDT/PIC), test framework, QEMU exit |
+| `main.rs` | `kernel_main`: boot sequence, FS demo, executor spawn |
+| `gdt.rs` | GDT/TSS + double-fault IST stack via `SyncUnsafeCell` |
+| `interrupts.rs` | IDT, conditional APIC/PIC EOI dispatch; page fault triggers crash dump via `panic!` |
+| `apic/mod.rs` | APIC subsystem: inline ACPI MADT parser, detection, LAPIC+I/O APIC init, IRQ→GSI mapping |
+| `apic/lapic.rs` | LAPIC MMIO driver (ID, version, SVR enable, EOI at offset 0xB0) |
+| `apic/ioapic.rs` | I/O APIC MMIO driver (indirect register access, 24-entry redirection table) |
+| `sse.rs` | SSE enablement via CR0/CR4 registers |
 
-### Memory Management (6)
+### Memory Management
 
-| Module | LOC | Purpose |
-|--------|-----|---------|
-| `memory.rs` | 55 | `OffsetPageTable` init, `EmptyFrameAllocator` |
-| `memory/buddy.rs` | 326 | Buddy frame allocator (4 KiB–4 MiB, bitmap, deallocation) |
-| `allocator.rs` | 106 | `#[global_allocator]`, `Locked<A>`, `init_heap()` |
-| `allocator/tlsf.rs` | 347 | TLSF heap (O(1), 19×32 classes, coalescing, alignment), `debug_assert!` guards against 4 GiB truncation |
-| `allocator/bump.rs` | 64 | Bump allocator (reference) |
-| `allocator/linked_list.rs` | 154 | Linked-list allocator (reference) |
+| Module | Purpose |
+|--------|---------|
+| `memory.rs` | `OffsetPageTable` init, `EmptyFrameAllocator` |
+| `memory/buddy.rs` | Buddy frame allocator (4 KiB–4 MiB, bitmap, deallocation) |
+| `allocator.rs` | `#[global_allocator]`, `Locked<A>`, `init_heap()` |
+| `allocator/tlsf.rs` | TLSF heap (O(1), 19×32 classes, coalescing, alignment), `debug_assert!` guards against 4 GiB truncation |
+| `allocator/bump.rs` | Bump allocator (reference) |
+| `allocator/linked_list.rs` | Linked-list allocator (reference) |
 
-### I/O & Display (7)
+### I/O & Display
 
-| Module | LOC | Purpose |
-|--------|-----|---------|
-| `uart.rs` | 99 | UART 16550 driver, bounded `wait_for!` spin loop (100K retries) |
-| `pic.rs` | 120 | 8259 PIC driver (replaces `pic8259` crate) |
-| `serial.rs` | 41 | `serial_print!` macros, serial port init |
-| `vga_buffer.rs` | 18 | `println!`/`print!` macros (serial + framebuffer) |
-| `framebuffer.rs` | 366 | Pixel text renderer, scrolling, RGB/BGR, Ctrl+/- text scaling (1×–4×), ANSI SGR colors, underline cursor |
-| `font.rs` | 108 | 8×16 VGA font (96 glyphs, 1536 bytes) |
-| `shell.rs` | 230 | Async command shell: help, mem, trace, ls, cat, alloc, uptime, clear, echo |
+| Module | Purpose |
+|--------|---------|
+| `uart.rs` | UART 16550 driver, bounded `wait_for!` spin loop (100K retries) |
+| `pic.rs` | 8259 PIC driver (replaces `pic8259` crate) |
+| `serial.rs` | `serial_print!` macros, serial port init |
+| `vga_buffer.rs` | `println!`/`print!` macros (serial + framebuffer) |
+| `framebuffer.rs` | Pixel text renderer, scrolling, RGB/BGR, Ctrl+/- text scaling (1×–4×), ANSI SGR colors, underline cursor |
+| `font.rs` | 8×16 VGA font (96 glyphs, 1536 bytes) |
+| `shell.rs` | Async command shell: help, mem, trace, ls, cat, alloc, uptime, clear, echo |
 
-### Async Runtime (5)
+### Async Runtime
 
-| Module | LOC | Purpose |
-|--------|-----|---------|
-| `task/mod.rs` | 46 | `Task` struct, `TaskId`, manual `Debug` impl |
-| `task/executor.rs` | 116 | Async executor: `BTreeMap`, `ArrayQueue`, HLT idle, manual `Debug` impl |
-| `task/keyboard.rs` | 92 | Async scancode stream, interrupt-safe |
-| `array_queue.rs` | 85 | Lock-free SPSC ring buffer (replaces `crossbeam-queue`) |
-| `async_utils.rs` | 91 | `Stream`, `StreamExt`, `AtomicWaker` with interrupt guard (replaces `futures-util`) |
-| `once_cell.rs` | 59 | `OnceCell` (replaces `conquer-once`) |
+| Module | Purpose |
+|--------|---------|
+| `task/mod.rs` | `Task` struct, `TaskId`, manual `Debug` impl |
+| `task/executor.rs` | Async executor: `BTreeMap`, `ArrayQueue`, HLT idle, manual `Debug` impl |
+| `task/keyboard.rs` | Async scancode stream, interrupt-safe |
+| `array_queue.rs` | Lock-free SPSC ring buffer (replaces `crossbeam-queue`) |
+| `async_utils.rs` | `Stream`, `StreamExt`, `AtomicWaker` with interrupt guard (replaces `futures-util`) |
+| `once_cell.rs` | `OnceCell` (replaces `conquer-once`) |
 
-### Filesystem (2)
+### Filesystem
 
-| Module | LOC | Purpose |
-|--------|-----|---------|
-| `fs/mod.rs` | 234 | Hierarchical in-memory FS, `static FS` (no `lazy_static`), `&'static str` paths |
-| `fs/inode.rs` | 102 | `Inode` with `&'static str` names, const constructors, `#[derive(Debug)]` on `FileSystem` |
+| Module | Purpose |
+|--------|---------|
+| `fs/mod.rs` | Hierarchical in-memory FS, `static FS` (no `lazy_static`), `&'static str` paths |
+| `fs/inode.rs` | `Inode` with `&'static str` names, const constructors, `#[derive(Debug)]` on `FileSystem` |
 
-### Observability (4)
+### Observability
 
-| Module | LOC | Purpose |
-|--------|-----|---------|
-| `log.rs` | 76 | Structured logging via `log` crate (error→trace levels) |
-| `monitor.rs` | 199 | Lock-free atomic counters: alloc, frames, tasks, interrupts |
-| `trace.rs` | 144 | 4096-entry ring buffer, RDTSC timestamps, `trace_event!` macro |
-| `debug.rs` | 140 | Register dump (16 GPRs + CR0–CR4), RBP-chain stack trace, crash dump, hexdump |
+| Module | Purpose |
+|--------|---------|
+| `log.rs` | Structured logging via `log` crate (error→trace levels) |
+| `monitor.rs` | Lock-free atomic counters: alloc, frames, tasks, interrupts |
+| `trace.rs` | 4096-entry ring buffer, RDTSC timestamps, `trace_event!` macro |
+| `debug.rs` | Register dump (16 GPRs + CR0–CR4), RBP-chain stack trace, crash dump, hexdump |
 
 ---
 
@@ -157,14 +157,11 @@ Two separate Cargo workspaces:
 
 Tests are split into two QEMU boots:
 
-| Binary | Tests | Boot Mechanism |
-|--------|-------|----------------|
-| `all_tests_elf` | 46 (basic_boot 1, heap 7, fs 7, framebuffer 11, buddy 5, array_queue 3, apic 12) | Shared framebuffer + heap + TLSF init, runs all `#[test_case]` fns |
-| `should_panic_elf` | 1 | Standalone, `harness=false`, expects kernel panic |
-| `stack_overflow` | 1 | Skipped by default (triggers real stack overflow, flaky) |
-
-**Before unification:** 4 separate binaries → 4 QEMU boots, ~93s.
-**After unification:** 2 binaries → 2 QEMU boots, ~49s (47% faster).
+| Binary | Mechanism |
+|--------|-----------|
+| `all_tests_elf` | Shared framebuffer + heap + TLSF init in `tests/all.rs`, runs all `#[test_case]` fns |
+| `should_panic_elf` | Standalone, `harness=false`, expects kernel panic |
+| `stack_overflow` | Skipped by default (triggers real stack overflow, flaky) |
 
 ### Test flow
 
@@ -188,7 +185,7 @@ Triggered on PRs to `master` (not on merge). Markdown-only PRs skip this pipelin
 | `fmt` | Cargo | `cargo fmt --check` kernel + runner |
 | `clippy` | Cargo | Kernel: `cargo clippy --target x86_64-unknown-none -- -D warnings`. Runner: `SKIP_KERNEL_BUILD=1 cargo clippy --no-default-features -- -D warnings` |
 | `deny` | cargo-deny | Advisories, licenses, bans for both workspaces |
-| `build-and-test` | Cargo + QEMU | Build runner + test ELFs, upload boot images artifact, 46 tests in 2 boots |
+| `build-and-test` | Cargo + QEMU | Build runner + test ELFs, upload boot images artifact |
 
 **Caching:** Shared `cargo-*` key. Paths: `~/.cargo/registry/`, `~/.cargo/git/`, `target/`, `runner/target/`.
 
@@ -229,7 +226,7 @@ Physical memory:
 
 ---
 
-## Dependency Graph (Kernel, 14 crates)
+## Dependency Graph (Kernel)
 
 ```
 yonti_os (root)
@@ -246,11 +243,11 @@ yonti_os (root)
 
 Inline modules (replaced external crates):
   uart.rs ← uart_16550     pic.rs ← pic8259
-  array_queue.rs ← crossbeam-queue (+4 transitive)
-  async_utils.rs ← futures-util (+4 transitive)
-  once_cell.rs ← conquer-once (+1 transitive)
+  array_queue.rs ← crossbeam-queue
+  async_utils.rs ← futures-util
+  once_cell.rs ← conquer-once
 
-Net reduction: 32 → 14 crates (56% fewer)
+Net reduction from external to inline modules.
 ```
 
 ---
@@ -262,8 +259,8 @@ Net reduction: 32 → 14 crates (56% fewer)
 
 | TLSF as global allocator | O(1) guarantee, better fragmentation than fixed-size block allocator |
 | Buddy frame allocator | Enables frame deallocation (prerequisite for slab allocator) |
-| Inline driver modules | Eliminated 18 crates, zero duplicate versions |
-| Unified test binary | 4 QEMU boots → 2 (93s → 49s, 47% faster) |
+| Inline driver modules | Eliminated external crate dependencies |
+| Unified test binary | Single `tests/all.rs` entry point, shared init |
 | Observability pipeline | log → monitor → trace → debug, each builds on the prior |
 | `--cfg bazel` guard in lib.rs | Bazel compiles library with test API but without entry_point |
 | AtomicWaker interrupt guard | `without_interrupts()` prevents ISR/task data race |
