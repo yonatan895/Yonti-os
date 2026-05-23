@@ -303,7 +303,9 @@ test-runner bazel-bin/kernel/should_panic_elf  # 1 test, 1 boot
 
 ## CI Pipeline (`.github/workflows/ci.yml`)
 
-Four jobs, all must pass before merge:
+Triggered only on PRs to `master` (no duplicate run on merge). Branch protection requires all checks to pass.
+
+Four jobs:
 
 ```
 ┌──────┐  ┌────────┐  ┌──────┐
@@ -320,15 +322,23 @@ Four jobs, all must pass before merge:
 | Job | Tech | What it checks |
 |-----|------|---------------|
 | `fmt` | Cargo | `cargo fmt --check` for kernel + runner |
-| `clippy` | Cargo | `cargo clippy -- -D warnings` for both |
+| `clippy` | Cargo | `cargo clippy -- -D warnings` for both, kernel pre-built to warm runner cache |
 | `deny` | cargo-deny | Advisories, licenses, bans for both workspaces |
-| `build-and-test` | **Bazel + Cargo** | Bazel builds kernel ELFs, Cargo builds test-runner, QEMU runs all tests |
+| `build-and-test` | Cargo | `cargo build` kernel + runner + test ELFs, QEMU runs all tests |
 
 ### Caching
 
-- **Cargo**: `~/.cargo/registry/`, `~/.cargo/git/`, `runner/target/`
-- **Bazel**: `~/.cache/bazel`
-- **Keys**: `hashFiles('**/Cargo.lock', '**/MODULE.bazel')`
+- **Cargo**: `~/.cargo/registry/`, `~/.cargo/git/`, `target/`, `runner/target/`
+- **Keys**: `hashFiles('**/Cargo.lock')`
+
+### Markdown-only PRs
+
+PRs that change only `.md` files skip the full pipeline. A separate `markdown-lint.yml` workflow runs `markdownlint-cli2` instead.
+
+### Branch protection
+
+- `master` requires PR + all status checks to pass before merge
+- CI runs only on `pull_request` — no duplicate run on merge commit
 
 ---
 
@@ -419,12 +429,11 @@ Total: 15 crates in Cargo.lock (down from 32 after dependency reduction)
 
 ## Quick Reference
 
-| Operation | Cargo | Bazel |
-|-----------|-------|-------|
-| Build kernel | `cd kernel && cargo build` | `bazel build --config=bare //kernel:yonti_os` |
-| Build test ELFs | `cargo build --tests` | `bazel build --config=bare //kernel:all_tests_elf` |
-| Run all tests | `./run_tests.sh` | `./run_tests.sh` (Bazel ELFs + Cargo runner) |
-| Run single test | `./run_tests.sh should_panic` | same |
+| Operation | Cargo | Bazel (local dev) |
+|-----------|-------|-------------------|
+| Build kernel | `cd kernel && cargo build --target x86_64-unknown-none` | `bazel build --config=bare //kernel:yonti_os` |
+| Build test ELFs | `cargo build --tests --target x86_64-unknown-none` | `bazel build --config=bare //kernel:all_tests_elf` |
+| Run all tests | `./run_tests.sh` | `./run_tests.sh` |
 | Format check | `cargo fmt --all -- --check` | `bazel build //:fmt` |
 | Clippy check | `cargo clippy -- -D warnings` | `bazel build //:clippy` |
 | Deny check | `cargo deny check` | `bazel run //:deny` |

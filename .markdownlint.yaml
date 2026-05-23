@@ -1,0 +1,21 @@
+# Markdown linting rules for Yonti-os
+default: true
+
+# Allow inline HTML (used in README links, targets, etc.)
+MD033: false
+
+# Allow bare URLs (used in AGENTS.md and DESIGN.md)
+MD034: false
+
+# Line length: 120 chars (DESIGN.md has long code blocks)
+MD013:
+  line_length: 120
+  code_blocks: false
+  tables: false
+
+# Allow multiple top-level headings (DESIGN.md uses multiple H1 sections)
+MD025: false
+
+# Allow duplicate headings (different sections may reuse names)
+MD024:
+  siblings_only: true

@@ -4,67 +4,71 @@ A bare-metal x86_64 operating system kernel written in Rust.
 
 ## Requirements
 
-- Rust nightly (enforced by `rust-toolchain.toml`)
-- `rust-src` component
-- `llvm-tools-preview` component
-- QEMU (`qemu-system-x86`)
-- Linux x86_64
+- **Rust nightly** (pinned by `rust-toolchain.toml`)
+- `rust-src` and `llvm-tools-preview` components
+- **QEMU** (`qemu-system-x86_64`)
 
-## Setup & Build
+Optional for local development:
+- **Bazel 7.4+** (via `bazelisk`) — hermetic builds
+- **cargo-deny** — license/security audit
+
+## Setup
 
 ```sh
 git clone https://github.com/yonatan895/Yonti-os
 cd Yonti-os
 
-# Install nightly toolchain and required components
 rustup toolchain install nightly
 rustup component add rust-src llvm-tools-preview --toolchain nightly
-
-# Install bootimage (builds bootable disk images)
-cargo install bootimage
-
-# Build the kernel
-cargo build
+sudo apt install qemu-system-x86
 ```
 
-## Run
+## Build & Run
 
 ```sh
-cargo run
-```
+# Build kernel ELF
+cd kernel && cargo build --target x86_64-unknown-none
 
-This boots the kernel in QEMU with serial output on stdio. The kernel initializes hardware, sets up memory, spawns async tasks, and demos the in-memory filesystem.
+# Run in QEMU (BIOS mode)
+cd runner && cargo run --bin runner -- bios
+
+# Or via Bazel:
+bazel build --config=bare //kernel:yonti_os
+```
 
 ## Test
 
 ```sh
-cargo test -- --skip stack_overflow
+# Run all tests (11 tests, 2 QEMU boots)
+./run_tests.sh
+
+# Run a single test binary
+./run_tests.sh all
+./run_tests.sh should_panic
 ```
 
-Tests run inside QEMU with serial output. The `stack_overflow` test is excluded because it triggers a real stack overflow and may hang depending on QEMU version.
+`run_tests.sh` uses Cargo-built ELFs in CI and prefers Bazel-built ELFs locally (with Cargo fallback).
 
 ## Features
 
-- **VGA text mode** output with 16-color support
-- **Serial port** (UART 16550) output for logging
-- **GDT** with kernel code segment and TSS (double fault IST)
+- **Framebuffer** text renderer (8x16 VGA font, pixel-based)
+- **Serial port** (UART 16550) output for logging and tests
 - **IDT** with handlers for breakpoint, double fault, page fault, timer, and keyboard
-- **PIC** remapping (offsets 32/40)
+- **PIC** remapping (offsets 32/40), inlined driver (`src/pic.rs`)
 - **SSE** enablement via CR0/CR4 registers
-- **Paging** with `OffsetPageTable` from bootloader-provided mappings
-- **Frame allocation** from bootloader memory map
-- **Heap** (1 MiB at `0x4444_4444_0000`) with fixed-size block allocator and linked-list fallback
-- **Async executor** with cooperative multitasking (`futures-util` streams)
+- **Paging** with `OffsetPageTable` from bootloader-provided identity mapping
+- **Buddy allocator** for physical frames (4 KiB–4 MiB blocks, O(log n))
+- **TLSF heap allocator** (O(1) worst-case, 1 MiB at `0x4444_4444_0000`)
+- **Async executor** with cooperative multitasking
 - **Async keyboard** input via scancode queue and atomic waker
 
 ### In-Memory Filesystem (`src/fs/`)
 
-A simple, safe, in-memory filesystem — no disk driver required. All data lives in heap-allocated `Vec<u8>`.
+Hierarchical, heap-backed filesystem — no disk driver required.
 
-- Hierarchical directories with `BTreeMap` children
 - Create, read, write, append files
 - Create directories, list contents, check existence
-- Nested path resolution (e.g. `/home/user/file.txt`)
+- Nested path resolution (`/home/user/file.txt`)
 - Thread-safe via `spin::Mutex`
 
 ```rust
@@ -75,3 +79,20 @@ fs.create_file("/hello.txt").unwrap();
 fs.write_file("/hello.txt", b"Hello, world!").unwrap();
 assert_eq!(fs.read_file("/hello.txt").unwrap(), b"Hello, world!");
 ```
+
+## CI Pipeline
+
+PRs to `master` are gated by four checks:
+
+| Job | What it checks |
+|-----|---------------|
+| `fmt` | `cargo fmt --check` for kernel + runner |
+| `clippy` | `cargo clippy -- -D warnings` for both |
+| `deny` | Security advisories, licenses, bans |
+| `build-and-test` | Build + QEMU integration tests (11 tests, 2 boots) |
+
+All jobs use Cargo. PR-only (no duplicate run on merge). Markdown-only PRs skip the full pipeline and run `markdownlint-cli2` instead.
+
+## Architecture
+
+See [DESIGN.md](DESIGN.md) for the full build system architecture, dependency graph, boot process, and memory layout.
