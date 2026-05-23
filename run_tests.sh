@@ -13,7 +13,8 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 KERNEL_DIR="$SCRIPT_DIR/kernel"
 RUNNER_DIR="$SCRIPT_DIR/runner"
 TEST_RUNNER="$RUNNER_DIR/target/x86_64-unknown-linux-gnu/debug/test-runner"
-TARGET_DIR="$SCRIPT_DIR/target/x86_64-unknown-none/debug/deps"
+TARGET="x86_64-unknown-none"
+TARGET_DIR="$SCRIPT_DIR/target/$TARGET/debug/deps"
 
 TIMEOUT="${TIMEOUT:-90}"
 PASSED=0
@@ -43,22 +44,30 @@ build_test_runner() {
     fi
 }
 
-# Build the kernel first (needed for runner's build.rs cache)
+# Build the kernel (lib crate, needed for runner's build.rs cache)
 build_kernel() {
     say "Building kernel..."
-    (cd "$KERNEL_DIR" && cargo build --target x86_64-unknown-none)
+    (cd "$KERNEL_DIR" && cargo build --target "$TARGET")
 }
 
-run_test() {
+# Build all test binaries at once — avoids recompiling the kernel for each test
+build_all_tests() {
+    say "Building all tests..."
+    (cd "$KERNEL_DIR" && cargo build --tests --target "$TARGET")
+}
+
+# Find the most recently built test binary by name
+find_test_binary() {
+    local test_name="$1"
+    ls -t "$TARGET_DIR/${test_name}-"* 2>/dev/null | grep -v '\.d$' | head -1
+}
+
+run_one_test() {
     local test_name="$1"
     say "Running test: ${test_name}"
 
-    # Build the test binary
-    (cd "$KERNEL_DIR" && cargo build --test "$test_name" --target x86_64-unknown-none)
-
-    # Find the test binary
     local binary
-    binary=$(ls "$TARGET_DIR/${test_name}-"* 2>/dev/null | grep -v '\.d$' | head -1)
+    binary=$(find_test_binary "$test_name")
 
     if [ -z "$binary" ]; then
         fail "Could not find test binary for ${test_name}"
@@ -66,7 +75,6 @@ run_test() {
         return 1
     fi
 
-    # Run via test-runner with timeout
     local exit_code=0
     timeout "$TIMEOUT" "$TEST_RUNNER" "$binary" || exit_code=$?
 
@@ -115,16 +123,18 @@ build_kernel
 build_test_runner
 
 if [ -n "${1:-}" ]; then
-    run_test "$1" || true
+    build_all_tests
+    run_one_test "$1" || true
     print_summary
     [ "$FAILED" -eq 0 ] || exit 1
 else
+    build_all_tests
     for test in basic_boot heap_allocation file_system should_panic; do
-        run_test "$test" || true
+        run_one_test "$test" || true
     done
 
     # stack_overflow is flaky — skip by default
-    # run_test stack_overflow || true
+    # run_one_test stack_overflow || true
 
     print_summary
     [ "$FAILED" -eq 0 ] || exit 1
