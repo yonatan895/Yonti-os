@@ -4,6 +4,7 @@
 #![test_runner(crate::test_runner)]
 #![reexport_test_harness_main = "test_main"]
 #![feature(abi_x86_interrupt)]
+#![allow(unexpected_cfgs)]
 extern crate alloc;
 
 pub mod allocator;
@@ -89,13 +90,13 @@ pub fn test_panic_handler(info: &PanicInfo) -> ! {
     hlt_loop();
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(bazel)))]
 use bootloader_api::{entry_point, BootInfo};
 
-#[cfg(test)]
+#[cfg(all(test, not(bazel)))]
 entry_point!(test_kernel_main, config = &BOOTLOADER_CONFIG);
 
-#[cfg(test)]
+#[cfg(all(test, not(bazel)))]
 fn test_kernel_main(boot_info: &'static mut BootInfo) -> ! {
     init();
     if let Some(fb) = boot_info.framebuffer.take() {
@@ -113,7 +114,7 @@ pub fn hlt_loop() -> ! {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(bazel)))]
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     test_panic_handler(info)

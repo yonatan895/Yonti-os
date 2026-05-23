@@ -21,9 +21,7 @@ jobs:
       - name: Check kernel formatting
         run: cargo fmt --all -- --check
       - name: Check runner formatting
-        run: |
-          cd runner
-          cargo fmt -- --check
+        run: cd runner && cargo fmt -- --check
 
   clippy:
     name: "clippy"
@@ -73,23 +71,28 @@ jobs:
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: rust-src, llvm-tools-preview
+      - name: Setup Bazel
+        uses: bazelbuild/setup-bazelisk@v3
+        with:
+          bazelisk-version: "1.x"
       - uses: actions/cache@v4
         with:
           path: |
+            ~/.cache/bazel
             ~/.cargo/registry/
             ~/.cargo/git/
-            target/
             runner/target/
-          key: build-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          key: build-${{ runner.os }}-${{ hashFiles('**/Cargo.lock', '**/MODULE.bazel') }}
           restore-keys: build-${{ runner.os }}-
       - name: Install QEMU
         run: |
           sudo apt-get update -q
           sudo apt-get install -y -q qemu-system-x86
-      - name: Build kernel
-        run: cargo build --target x86_64-unknown-none
-        working-directory: kernel
-      - name: Build test-runner
+      - name: Repin crate deps (if Cargo.lock changed)
+        run: CARGO_BAZEL_REPIN=1 bazel build --config=bare //kernel:yonti_os_lib
+      - name: Build kernel ELFs (Bazel)
+        run: bazel build --config=bare //kernel:all_tests_elf //kernel:should_panic_elf
+      - name: Build test-runner (Cargo)
         run: cargo build --no-default-features --bin test-runner
         working-directory: runner
       - name: Upload boot images

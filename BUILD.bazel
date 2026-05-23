@@ -1,0 +1,43 @@
+load("@rules_rust//rust:defs.bzl", "rustfmt_aspect", "clippy_aspect")
+
+# ── Format check: bazel build //:fmt ──────────────────────────────
+alias(
+    name = "fmt",
+    actual = "//kernel:yonti_os_lib",
+    aspects = [rustfmt_aspect],
+)
+
+# ── Clippy check: bazel build //:clippy ──────────────────────────
+alias(
+    name = "clippy",
+    actual = "//kernel:yonti_os_lib",
+    aspects = [clippy_aspect],
+)
+
+# ── cargo-deny: bazel run //:deny ─────────────────────────────────
+sh_binary(
+    name = "deny",
+    srcs = ["tools/deny.sh"],
+    data = [
+        "deny.toml",
+        "Cargo.lock",
+        "runner/Cargo.lock",
+        "runner/deny.toml",
+    ],
+)
+
+# ── Export kernel ELFs for QEMU testing ─────────────────────────
+genrule(
+    name = "export_kernel_elfs",
+    srcs = [
+        "//kernel:yonti_os",
+        "//kernel:all_tests_elf",
+        "//kernel:should_panic_elf",
+    ],
+    outs = [
+        "bazel-kernel-elfs/yonti_os",
+        "bazel-kernel-elfs/all_tests_elf",
+        "bazel-kernel-elfs/should_panic_elf",
+    ],
+    cmd = "cp $(execpath //kernel:yonti_os) $(execpath bazel-kernel-elfs/yonti_os) && cp $(execpath //kernel:all_tests_elf) $(execpath bazel-kernel-elfs/all_tests_elf) && cp $(execpath //kernel:should_panic_elf) $(execpath bazel-kernel-elfs/should_panic_elf)",
+)

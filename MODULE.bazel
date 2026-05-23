@@ -1,0 +1,43 @@
+module(
+    name = "yonti_os",
+    version = "0.1.0",
+)
+
+bazel_dep(name = "rules_rust", version = "0.70.0")
+bazel_dep(name = "platforms", version = "1.0.0")
+
+# ── Rust toolchain (nightly, targets both host and bare-metal) ──
+
+rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
+rust.toolchain(
+    edition = "2021",
+    versions = ["nightly/2026-05-21"],
+    extra_target_triples = [
+        "x86_64-unknown-none",
+        "x86_64-unknown-linux-gnu",
+    ],
+)
+use_repo(rust, "rust_toolchains")
+register_toolchains("@rust_toolchains//:all")
+
+# ── Cargo dependency bridges (two separate workspaces) ──
+
+crate = use_extension("@rules_rust//crate_universe:extensions.bzl", "crate")
+crate.from_cargo(
+    name = "crates_kernel",
+    cargo_lockfile = "//:Cargo.lock",
+    manifests = ["//kernel:Cargo.toml"],
+    supported_platform_triples = [
+        "x86_64-unknown-linux-gnu",
+        "x86_64-unknown-none",
+    ],
+)
+crate.from_cargo(
+    name = "crates_runner",
+    cargo_lockfile = "//runner:Cargo.lock",
+    manifests = ["//runner:Cargo.toml"],
+    supported_platform_triples = [
+        "x86_64-unknown-linux-gnu",
+    ],
+)
+use_repo(crate, "crates_kernel", "crates_runner")

@@ -1,38 +1,28 @@
 #!/bin/bash
-# Run kernel integration tests via QEMU
+# Run kernel integration tests via QEMU (Bazel builds ELFs, Cargo builds test-runner).
 # Usage: ./run_tests.sh [test_name]
-#   test_name: all, should_panic, stack_overflow
+#   test_name: all, should_panic
 #
-# Tests basic_boot, heap_allocation, and file_system are now unified
-# in a single `all` binary that boots the kernel once and runs all
-# 10 test functions sequentially.
-#
-# Environment:
-#   TIMEOUT           Per-test timeout in seconds (default: 90)
-#   CI                If set, enables CI-friendly output (no color)
+# Bazel-built ELFs: bazel-bin/kernel/{all_tests_elf,should_panic_elf}
+# Cargo-built test-runner: runner/target/.../test-runner
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-KERNEL_DIR="$SCRIPT_DIR/kernel"
 RUNNER_DIR="$SCRIPT_DIR/runner"
 TEST_RUNNER="$RUNNER_DIR/target/x86_64-unknown-linux-gnu/debug/test-runner"
-TARGET="x86_64-unknown-none"
-TARGET_DIR="$SCRIPT_DIR/target/$TARGET/debug/deps"
 
 TIMEOUT="${TIMEOUT:-90}"
 PASSED=0
 FAILED=0
 START_TIME=$(date +%s)
 
-# Color helpers (off in CI)
 if [ -n "${CI:-}" ]; then
-    BOLD=""; RED=""; GREEN=""; YELLOW=""; NC=""
+    BOLD=""; RED=""; GREEN=""; NC=""
 else
     BOLD="$(tput bold 2>/dev/null || echo '')"
     RED="$(tput setaf 1 2>/dev/null || echo '')"
     GREEN="$(tput setaf 2 2>/dev/null || echo '')"
-    YELLOW="$(tput setaf 3 2>/dev/null || echo '')"
     NC="$(tput sgr0 2>/dev/null || echo '')"
 fi
 
@@ -40,42 +30,28 @@ say() { echo -e "${BOLD}==>${NC} $*"; }
 ok()  { echo -e "    ${GREEN}✓${NC} $*"; }
 fail() { echo -e "    ${RED}✗${NC} $*"; }
 
-# Build the test-runner if needed
 build_test_runner() {
     if [ ! -f "$TEST_RUNNER" ]; then
-        say "Building test-runner..."
-        (cd "$RUNNER_DIR" && cargo build --bin test-runner)
+        say "Building test-runner (cargo)..."
+        (cd "$RUNNER_DIR" && cargo build --no-default-features --bin test-runner)
     fi
 }
 
-# Build the kernel (lib crate, needed for runner's build.rs cache)
-build_kernel() {
-    say "Building kernel..."
-    (cd "$KERNEL_DIR" && cargo build --target "$TARGET")
-}
-
-# Build a single test binary
-build_test() {
-    local test_name="$1"
-    say "Building test: ${test_name}..."
-    (cd "$KERNEL_DIR" && cargo build --test "$test_name" --target "$TARGET")
-}
-
-# Find the most recently built test binary by name
-find_test_binary() {
-    local test_name="$1"
-    ls -t "$TARGET_DIR/${test_name}-"* 2>/dev/null | grep -v '\.d$' | head -1
+build_kernel_elfs() {
+    say "Building kernel ELFs (bazel)..."
+    bazel build --config=bare //kernel:all_tests_elf //kernel:should_panic_elf
 }
 
 run_one_test() {
     local test_name="$1"
+    local binary_name="${test_name}_tests_elf"
+    # should_panic binary doesn't have _tests suffix
+    [ "$test_name" = "should_panic" ] && binary_name="${test_name}_elf"
+    local binary="$SCRIPT_DIR/bazel-bin/kernel/${binary_name}"
+
     say "Running test: ${test_name}"
-
-    local binary
-    binary=$(find_test_binary "$test_name")
-
-    if [ -z "$binary" ]; then
-        fail "Could not find test binary for ${test_name}"
+    if [ ! -f "$binary" ]; then
+        fail "Binary not found: $binary"
         FAILED=$((FAILED + 1))
         return 1
     fi
@@ -84,66 +60,38 @@ run_one_test() {
     timeout "$TIMEOUT" "$TEST_RUNNER" "$binary" || exit_code=$?
 
     case $exit_code in
-        0)
-            ok "${test_name}"
-            PASSED=$((PASSED + 1))
-            return 0
-            ;;
-        1)
-            fail "${test_name} (FAILED)"
-            FAILED=$((FAILED + 1))
-            return 1
-            ;;
-        124)
-            fail "${test_name} (TIMEOUT after ${TIMEOUT}s)"
-            FAILED=$((FAILED + 1))
-            return 1
-            ;;
-        *)
-            fail "${test_name} (ERROR: exit code ${exit_code})"
-            FAILED=$((FAILED + 1))
-            return 1
-            ;;
+        0) ok "${test_name}" ; PASSED=$((PASSED + 1)) ;;
+        1) fail "${test_name} (FAILED)" ; FAILED=$((FAILED + 1)) ;;
+        124) fail "${test_name} (TIMEOUT)" ; FAILED=$((FAILED + 1)) ;;
+        *) fail "${test_name} (exit ${exit_code})" ; FAILED=$((FAILED + 1)) ;;
     esac
 }
 
 print_summary() {
-    local elapsed=$(($(date +%s) - START_TIME))
-    local total=$((PASSED + FAILED))
-
+    local t=$((PASSED + FAILED))
+    local e=$(($(date +%s) - START_TIME))
     echo ""
     echo "${BOLD}────────────────────────────────────────${NC}"
     echo -n "${BOLD}Results:${NC} "
     if [ "$FAILED" -eq 0 ]; then
-        echo "${GREEN}All ${total} tests passed${NC} (${elapsed}s)"
+        echo "${GREEN}All ${t} passed${NC} (${e}s)"
     else
-        echo "${RED}${FAILED}/${total} failed${NC}, ${GREEN}${PASSED} passed${NC} (${elapsed}s)"
+        echo "${RED}${FAILED}/${t} failed${NC} (${e}s)"
     fi
     echo "${BOLD}────────────────────────────────────────${NC}"
 }
 
-# --- Main ---
+# ── Main ───────────────────────────────────────────────────────────
 
-build_kernel
 build_test_runner
+build_kernel_elfs
 
 if [ -n "${1:-}" ]; then
-    build_test "$1"
     run_one_test "$1" || true
-    print_summary
-    [ "$FAILED" -eq 0 ] || exit 1
 else
-    # all: unified binary with basic_boot + heap_allocation + file_system (1 boot, 10 tests)
-    build_test "all"
     run_one_test "all" || true
-    # should_panic: standalone panic-expected test (1 boot)
-    build_test "should_panic"
     run_one_test "should_panic" || true
-
-    # stack_overflow is flaky — skip by default
-    # build_test stack_overflow
-    # run_one_test stack_overflow || true
-
-    print_summary
-    [ "$FAILED" -eq 0 ] || exit 1
 fi
+
+print_summary
+[ "$FAILED" -eq 0 ] || exit 1
