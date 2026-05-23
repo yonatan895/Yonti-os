@@ -37,7 +37,7 @@ pub fn init_test_idt() {
 #[allow(unconditional_recursion)]
 fn stack_overflow() {
     stack_overflow();
-    volatile::Volatile::new(0).read();
+    unsafe { core::ptr::read_volatile(0 as *const i32) };
 }
 
 entry_point!(test_kernel_main, config = &yonti_os::BOOTLOADER_CONFIG);
