@@ -9,6 +9,8 @@ use bootloader_api::info::{MemoryRegionKind, MemoryRegions};
 use x86_64::structures::paging::{FrameAllocator, PhysFrame, Size4KiB};
 use x86_64::PhysAddr;
 
+use crate::monitor;
+
 const MAX_ORDER: usize = 10;
 const MAX_TRACKED_FRAMES: usize = 131_072; // up to 512 MiB
 const BITMAP_U64_LEN: usize = MAX_TRACKED_FRAMES / 64;
@@ -57,6 +59,7 @@ impl BuddyAllocator {
             "too many physical frames to track"
         );
         allocator.total_frames = total_frames;
+        monitor::set_frame_metrics(total_frames);
 
         // Mark all usable frames as free
         for r in memory_regions
@@ -230,6 +233,7 @@ impl BuddyAllocator {
         }
 
         self.allocated_count += 1 << order;
+        monitor::inc_allocated_frames(1 << order);
         Some(PhysFrame::containing_address(PhysAddr::new(
             self.idx_to_phys(idx),
         )))
@@ -259,6 +263,7 @@ impl BuddyAllocator {
 
         self.insert_free(idx, order);
         self.allocated_count -= 1 << order;
+        monitor::dec_allocated_frames(1 << order);
     }
 
     pub fn deallocate_frame(&mut self, frame: PhysFrame<Size4KiB>) {

@@ -16,6 +16,7 @@ use yonti_os::memory;
 use yonti_os::println;
 use yonti_os::task::keyboard;
 use yonti_os::task::{executor::Executor, Task};
+use yonti_os::trace;
 
 entry_point!(kernel_main, config = &yonti_os::BOOTLOADER_CONFIG);
 fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
@@ -43,6 +44,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 
     allocator::init_heap(&mut mapper, &mut frame_allocator).expect("Heap init failed");
     log::info!("heap initialized");
+    trace::init();
 
     demo_fs();
     log::info!("filesystem demo done");
@@ -88,7 +90,11 @@ fn demo_fs() {
 #[cfg(not(test))]
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    println!("PANIC: {}", info);
+    yonti_os::debug::crash_dump(
+        &alloc::format!("{}", info),
+        info.location().map_or("?", |l| l.file()),
+        info.location().map_or(0, |l| l.line()),
+    );
     yonti_os::hlt_loop();
 }
 

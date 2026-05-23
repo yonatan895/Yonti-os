@@ -3,6 +3,8 @@ pub mod fixed_size_block;
 pub mod linked_list;
 pub mod tlsf;
 
+use crate::monitor;
+use crate::trace::TraceEventId;
 use alloc::alloc::{GlobalAlloc, Layout};
 use core::{convert::TryFrom, ptr::null_mut};
 use tlsf::TlsfAllocator;
@@ -32,11 +34,18 @@ impl<A> Locked<A> {
 unsafe impl GlobalAlloc for Locked<TlsfAllocator> {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         let mut tlsf = self.lock();
-        tlsf.malloc(layout.size())
+        let ptr = tlsf.malloc(layout.size());
+        if !ptr.is_null() {
+            monitor::inc_alloc(layout.size());
+            crate::trace_event!(TraceEventId::Alloc, layout.size(), ptr as u64);
+        }
+        ptr
     }
 
-    unsafe fn dealloc(&self, ptr: *mut u8, _layout: Layout) {
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         self.lock().free(ptr);
+        monitor::inc_free(layout.size());
+        crate::trace_event!(TraceEventId::Free, layout.size(), ptr as u64);
     }
 }
 
