@@ -1,6 +1,6 @@
 use crate::async_utils::{AtomicWaker, Stream, StreamExt};
+use crate::once_cell::OnceCell;
 use crate::{print, println};
-use conquer_once::spin::OnceCell;
 use core::{
     pin::Pin,
     task::{Context, Poll},
