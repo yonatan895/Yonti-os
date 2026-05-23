@@ -91,4 +91,13 @@ impl Inode {
             InodeKind::File(_) => Vec::new(),
         }
     }
+
+    pub fn remove_child(&mut self, name: &str) -> Result<Inode, &'static str> {
+        match &mut self.kind {
+            InodeKind::Directory(children) => {
+                children.remove(name).ok_or("file/directory not found")
+            }
+            InodeKind::File(_) => Err("cannot remove child from a file"),
+        }
+    }
 }

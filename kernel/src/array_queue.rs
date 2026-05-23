@@ -41,32 +41,36 @@ impl<T> ArrayQueue<T> {
     }
 
     pub fn push(&self, value: T) -> Result<(), T> {
-        let tail = self.tail.load(Ordering::Relaxed);
-        let next_tail = tail.wrapping_add(1);
+        x86_64::instructions::interrupts::without_interrupts(|| {
+            let tail = self.tail.load(Ordering::Relaxed);
+            let next_tail = tail.wrapping_add(1);
 
-        if next_tail.wrapping_sub(self.head.load(Ordering::Acquire)) > self.buffer.len() {
-            return Err(value);
-        }
+            if next_tail.wrapping_sub(self.head.load(Ordering::Acquire)) > self.buffer.len() {
+                return Err(value);
+            }
 
-        let idx = tail % self.buffer.len();
-        unsafe {
-            (*self.buffer[idx].value.get()).write(value);
-        }
-        self.tail.store(next_tail, Ordering::Release);
-        Ok(())
+            let idx = tail % self.buffer.len();
+            unsafe {
+                (*self.buffer[idx].value.get()).write(value);
+            }
+            self.tail.store(next_tail, Ordering::Release);
+            Ok(())
+        })
     }
 
     pub fn pop(&self) -> Result<T, PopError> {
-        let head = self.head.load(Ordering::Relaxed);
+        x86_64::instructions::interrupts::without_interrupts(|| {
+            let head = self.head.load(Ordering::Relaxed);
 
-        if head == self.tail.load(Ordering::Acquire) {
-            return Err(PopError);
-        }
+            if head == self.tail.load(Ordering::Acquire) {
+                return Err(PopError);
+            }
 
-        let idx = head % self.buffer.len();
-        let value = unsafe { (*self.buffer[idx].value.get()).assume_init_read() };
-        self.head.store(head.wrapping_add(1), Ordering::Release);
-        Ok(value)
+            let idx = head % self.buffer.len();
+            let value = unsafe { (*self.buffer[idx].value.get()).assume_init_read() };
+            self.head.store(head.wrapping_add(1), Ordering::Release);
+            Ok(value)
+        })
     }
 
     pub fn is_empty(&self) -> bool {

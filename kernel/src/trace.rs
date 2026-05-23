@@ -65,20 +65,22 @@ pub fn record(id: TraceEventId, arg0: u64, arg1: u64) {
     if !is_init() {
         return;
     }
-    let idx = TRACE.write_idx.fetch_add(1, Ordering::Relaxed) % BUFFER_SIZE;
-    // Detect overflow (statistical — not exact)
-    if idx == 0 {
-        TRACE.overflow_count.fetch_add(1, Ordering::Relaxed);
-    }
-    unsafe {
-        let entries: &mut [TraceEntry; BUFFER_SIZE] = (*TRACE.entries.get()).assume_init_mut();
-        entries[idx] = TraceEntry {
-            timestamp: read_tsc(),
-            event_id: id as u16,
-            arg0,
-            arg1,
-        };
-    }
+    x86_64::instructions::interrupts::without_interrupts(|| {
+        let idx = TRACE.write_idx.fetch_add(1, Ordering::Relaxed) % BUFFER_SIZE;
+        // Detect overflow (statistical — not exact)
+        if idx == 0 {
+            TRACE.overflow_count.fetch_add(1, Ordering::Relaxed);
+        }
+        unsafe {
+            let entries: &mut [TraceEntry; BUFFER_SIZE] = (*TRACE.entries.get()).assume_init_mut();
+            entries[idx] = TraceEntry {
+                timestamp: read_tsc(),
+                event_id: id as u16,
+                arg0,
+                arg1,
+            };
+        }
+    });
 }
 
 /// Shorthand for recording an event with no arguments
@@ -99,35 +101,37 @@ macro_rules! trace_event {
 pub fn dump_last(n: usize) {
     use crate::log::info;
 
-    let total = TRACE.write_idx.load(Ordering::Relaxed);
-    let start = total.saturating_sub(n);
+    x86_64::instructions::interrupts::without_interrupts(|| {
+        let total = TRACE.write_idx.load(Ordering::Relaxed);
+        let start = total.saturating_sub(n);
 
-    info!(
-        "trace events: total={} overflow={} (showing last {})",
-        total,
-        TRACE.overflow_count.load(Ordering::Relaxed),
-        n,
-    );
-
-    for i in start..total {
-        let entry = unsafe {
-            let entries: &[TraceEntry; BUFFER_SIZE] = (*TRACE.entries.get()).assume_init_ref();
-            &entries[i % BUFFER_SIZE]
-        };
-        let name = match entry.event_id {
-            1 => "ALLOC",
-            2 => "FREE",
-            10 => "TASK_SPAWN",
-            11 => "TASK_COMPLETE",
-            20 => "IRQ",
-            30 => "PAGE_FAULT",
-            _ => "UNKNOWN",
-        };
         info!(
-            "  [{:016x}] {} arg0={:#x} arg1={:#x}",
-            entry.timestamp, name, entry.arg0, entry.arg1,
+            "trace events: total={} overflow={} (showing last {})",
+            total,
+            TRACE.overflow_count.load(Ordering::Relaxed),
+            n,
         );
-    }
+
+        for i in start..total {
+            let entry = unsafe {
+                let entries: &[TraceEntry; BUFFER_SIZE] = (*TRACE.entries.get()).assume_init_ref();
+                &entries[i % BUFFER_SIZE]
+            };
+            let name = match entry.event_id {
+                1 => "ALLOC",
+                2 => "FREE",
+                10 => "TASK_SPAWN",
+                11 => "TASK_COMPLETE",
+                20 => "IRQ",
+                30 => "PAGE_FAULT",
+                _ => "UNKNOWN",
+            };
+            info!(
+                "  [{:016x}] {} arg0={:#x} arg1={:#x}",
+                entry.timestamp, name, entry.arg0, entry.arg1,
+            );
+        }
+    });
 }
 
 fn read_tsc() -> u64 {

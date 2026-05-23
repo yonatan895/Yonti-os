@@ -30,20 +30,18 @@ impl<T> OnceCell<T> {
     }
 
     pub fn try_init_once(&self, f: impl FnOnce() -> T) -> Result<(), TryInitError> {
-        if self.initialized.load(Ordering::Acquire) {
-            return Err(TryInitError::AlreadyInit);
-        }
+        x86_64::instructions::interrupts::without_interrupts(|| {
+            if self.initialized.load(Ordering::Acquire) {
+                return Err(TryInitError::AlreadyInit);
+            }
 
-        let val = f();
-        unsafe {
-            (*self.value.get()).write(val);
-        }
-        self.initialized.store(true, Ordering::Release);
-
-        // If someone raced us, they'll get AlreadyInit on their try_init_once
-        // call, which is fine since we already stored the value before
-        // publishing the flag.
-        Ok(())
+            let val = f();
+            unsafe {
+                (*self.value.get()).write(val);
+            }
+            self.initialized.store(true, Ordering::Release);
+            Ok(())
+        })
     }
 }
 
