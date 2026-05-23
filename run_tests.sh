@@ -1,16 +1,20 @@
 #!/bin/bash
-# Run kernel integration tests via QEMU (Bazel builds ELFs, Cargo builds test-runner).
+# Run kernel integration tests via QEMU.
 # Usage: ./run_tests.sh [test_name]
 #   test_name: all, should_panic
 #
-# Bazel-built ELFs: bazel-bin/kernel/{all_tests_elf,should_panic_elf}
-# Cargo-built test-runner: runner/target/.../test-runner
+# Supports both Cargo-built and Bazel-built ELFs.
+# In CI (CI=true): expects Cargo-built ELFs in target/
+# Locally: prefers Bazel ELFs in bazel-bin/, falls back to Cargo
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 RUNNER_DIR="$SCRIPT_DIR/runner"
+KERNEL_DIR="$SCRIPT_DIR/kernel"
 TEST_RUNNER="$RUNNER_DIR/target/x86_64-unknown-linux-gnu/debug/test-runner"
+TARGET_DIR="$SCRIPT_DIR/target/x86_64-unknown-none/debug/deps"
+TARGET="x86_64-unknown-none"
 
 TIMEOUT="${TIMEOUT:-90}"
 PASSED=0
@@ -32,26 +36,50 @@ fail() { echo -e "    ${RED}✗${NC} $*"; }
 
 build_test_runner() {
     if [ ! -f "$TEST_RUNNER" ]; then
-        say "Building test-runner (cargo)..."
+        say "Building test-runner..."
         (cd "$RUNNER_DIR" && cargo build --no-default-features --bin test-runner)
     fi
 }
 
-build_kernel_elfs() {
-    say "Building kernel ELFs (bazel)..."
-    bazel build --config=bare //kernel:all_tests_elf //kernel:should_panic_elf
+build_all_elfs() {
+    if [ -n "${CI:-}" ]; then
+        # CI: use Cargo
+        say "Building test ELFs (cargo)..."
+        (cd "$KERNEL_DIR" && cargo build --tests --target "$TARGET")
+    else
+        # Local: try Bazel first
+        if command -v bazel &>/dev/null && bazel build --config=bare //kernel:all_tests_elf //kernel:should_panic_elf 2>/dev/null; then
+            say "Built test ELFs (bazel)"
+        else
+            say "Building test ELFs (cargo)..."
+            (cd "$KERNEL_DIR" && cargo build --tests --target "$TARGET")
+        fi
+    fi
+}
+
+find_elf() {
+    local test_name="$1"
+    # Bazel-built ELFs
+    local bazel_name="${test_name}_tests_elf"
+    [ "$test_name" = "should_panic" ] && bazel_name="${test_name}_elf"
+    local bazel_path="$SCRIPT_DIR/bazel-bin/kernel/${bazel_name}"
+    if [ -f "$bazel_path" ]; then
+        echo "$bazel_path"
+        return
+    fi
+    # Cargo-built ELFs
+    ls -t "$TARGET_DIR/${test_name}-"* 2>/dev/null | grep -v '\.d$' | head -1
 }
 
 run_one_test() {
     local test_name="$1"
-    local binary_name="${test_name}_tests_elf"
-    # should_panic binary doesn't have _tests suffix
-    [ "$test_name" = "should_panic" ] && binary_name="${test_name}_elf"
-    local binary="$SCRIPT_DIR/bazel-bin/kernel/${binary_name}"
-
     say "Running test: ${test_name}"
-    if [ ! -f "$binary" ]; then
-        fail "Binary not found: $binary"
+
+    local binary
+    binary=$(find_elf "$test_name")
+
+    if [ -z "$binary" ]; then
+        fail "Binary not found for ${test_name}"
         FAILED=$((FAILED + 1))
         return 1
     fi
@@ -84,7 +112,7 @@ print_summary() {
 # ── Main ───────────────────────────────────────────────────────────
 
 build_test_runner
-build_kernel_elfs
+build_all_elfs
 
 if [ -n "${1:-}" ]; then
     run_one_test "$1" || true
