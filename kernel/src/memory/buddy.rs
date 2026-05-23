@@ -14,6 +14,8 @@ use crate::monitor;
 const MAX_ORDER: usize = 10;
 const MAX_TRACKED_FRAMES: usize = 131_072; // up to 512 MiB
 const BITMAP_U64_LEN: usize = MAX_TRACKED_FRAMES / 64;
+/// Sentinel value for free-list links. Must never be a valid frame index.
+const NULL_LINK: usize = usize::MAX;
 
 pub struct BuddyAllocator {
     free_lists: [Option<usize>; MAX_ORDER + 1],
@@ -155,7 +157,7 @@ impl BuddyAllocator {
         let header = self.frame_idx_to_ptr(idx);
         // Thread the free list through the first page of the block
         unsafe {
-            *(header as *mut usize) = self.free_lists[order].unwrap_or(0);
+            *(header as *mut usize) = self.free_lists[order].unwrap_or(NULL_LINK);
         }
         self.free_lists[order] = Some(idx);
     }
@@ -163,7 +165,7 @@ impl BuddyAllocator {
     fn pop_free(&mut self, order: usize) -> Option<usize> {
         let idx = self.free_lists[order]?;
         let next = unsafe { *(self.frame_idx_to_ptr(idx) as *const usize) };
-        self.free_lists[order] = if next == 0 { None } else { Some(next) };
+        self.free_lists[order] = if next == NULL_LINK { None } else { Some(next) };
         self.mark_range_allocated(idx, 1 << order);
         Some(idx)
     }
@@ -176,10 +178,10 @@ impl BuddyAllocator {
         while let Some(cur_idx) = current {
             if cur_idx == idx {
                 let next = unsafe { *(self.frame_idx_to_ptr(cur_idx) as *const usize) };
-                let next = if next == 0 { None } else { Some(next) };
+                let next = if next == NULL_LINK { None } else { Some(next) };
                 match prev {
                     Some(p) => unsafe {
-                        *(self.frame_idx_to_ptr(p) as *mut usize) = next.unwrap_or(0);
+                        *(self.frame_idx_to_ptr(p) as *mut usize) = next.unwrap_or(NULL_LINK);
                     },
                     None => {
                         self.free_lists[order] = next;
@@ -189,7 +191,11 @@ impl BuddyAllocator {
             }
             prev = current;
             let raw_next = unsafe { *(self.frame_idx_to_ptr(cur_idx) as *const usize) };
-            current = if raw_next == 0 { None } else { Some(raw_next) };
+            current = if raw_next == NULL_LINK {
+                None
+            } else {
+                Some(raw_next)
+            };
         }
     }
 

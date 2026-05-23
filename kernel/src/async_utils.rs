@@ -3,10 +3,9 @@
 //! Replaces `futures-util`, `futures-core`, `futures-task`, `pin-project-lite`,
 //! and `slab` with local implementations tailored to a single-threaded kernel.
 //!
-//! The `AtomicWaker` here is simplified compared to futures-core: since the
-//! kernel runs on a single core with cooperative scheduling (interrupts run to
-//! completion before returning), we don't need CAS-based lock-free concurrency
-//! — `UnsafeCell` suffices.
+//! The `AtomicWaker` uses `UnsafeCell` but disables interrupts during
+//! register/take to prevent data races with the keyboard ISR, which calls
+//! `wake()` from interrupt context.
 
 use core::cell::UnsafeCell;
 use core::pin::Pin;
@@ -68,9 +67,11 @@ impl AtomicWaker {
     }
 
     pub fn register(&self, waker: &Waker) {
-        unsafe {
+        // Disable interrupts to prevent the keyboard ISR from calling
+        // wake()/take() while we're modifying the waker cell.
+        x86_64::instructions::interrupts::without_interrupts(|| unsafe {
             *self.waker.get() = Some(waker.clone());
-        }
+        });
     }
 
     pub fn wake(&self) {
@@ -80,7 +81,9 @@ impl AtomicWaker {
     }
 
     pub fn take(&self) -> Option<Waker> {
-        unsafe { (*self.waker.get()).take() }
+        x86_64::instructions::interrupts::without_interrupts(|| unsafe {
+            (*self.waker.get()).take()
+        })
     }
 }
 
