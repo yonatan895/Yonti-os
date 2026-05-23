@@ -1,7 +1,11 @@
 #!/bin/bash
 # Run kernel integration tests via QEMU
 # Usage: ./run_tests.sh [test_name]
-#   test_name: basic_boot, heap_allocation, file_system, should_panic, stack_overflow
+#   test_name: all, should_panic, stack_overflow
+#
+# Tests basic_boot, heap_allocation, and file_system are now unified
+# in a single `all` binary that boots the kernel once and runs all
+# 10 test functions sequentially.
 #
 # Environment:
 #   TIMEOUT           Per-test timeout in seconds (default: 90)
@@ -13,7 +17,8 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 KERNEL_DIR="$SCRIPT_DIR/kernel"
 RUNNER_DIR="$SCRIPT_DIR/runner"
 TEST_RUNNER="$RUNNER_DIR/target/x86_64-unknown-linux-gnu/debug/test-runner"
-TARGET_DIR="$SCRIPT_DIR/target/x86_64-unknown-none/debug/deps"
+TARGET="x86_64-unknown-none"
+TARGET_DIR="$SCRIPT_DIR/target/$TARGET/debug/deps"
 
 TIMEOUT="${TIMEOUT:-90}"
 PASSED=0
@@ -43,22 +48,31 @@ build_test_runner() {
     fi
 }
 
-# Build the kernel first (needed for runner's build.rs cache)
+# Build the kernel (lib crate, needed for runner's build.rs cache)
 build_kernel() {
     say "Building kernel..."
-    (cd "$KERNEL_DIR" && cargo build --target x86_64-unknown-none)
+    (cd "$KERNEL_DIR" && cargo build --target "$TARGET")
 }
 
-run_test() {
+# Build a single test binary
+build_test() {
+    local test_name="$1"
+    say "Building test: ${test_name}..."
+    (cd "$KERNEL_DIR" && cargo build --test "$test_name" --target "$TARGET")
+}
+
+# Find the most recently built test binary by name
+find_test_binary() {
+    local test_name="$1"
+    ls -t "$TARGET_DIR/${test_name}-"* 2>/dev/null | grep -v '\.d$' | head -1
+}
+
+run_one_test() {
     local test_name="$1"
     say "Running test: ${test_name}"
 
-    # Build the test binary
-    (cd "$KERNEL_DIR" && cargo build --test "$test_name" --target x86_64-unknown-none)
-
-    # Find the test binary
     local binary
-    binary=$(ls "$TARGET_DIR/${test_name}-"* 2>/dev/null | grep -v '\.d$' | head -1)
+    binary=$(find_test_binary "$test_name")
 
     if [ -z "$binary" ]; then
         fail "Could not find test binary for ${test_name}"
@@ -66,7 +80,6 @@ run_test() {
         return 1
     fi
 
-    # Run via test-runner with timeout
     local exit_code=0
     timeout "$TIMEOUT" "$TEST_RUNNER" "$binary" || exit_code=$?
 
@@ -115,16 +128,21 @@ build_kernel
 build_test_runner
 
 if [ -n "${1:-}" ]; then
-    run_test "$1" || true
+    build_test "$1"
+    run_one_test "$1" || true
     print_summary
     [ "$FAILED" -eq 0 ] || exit 1
 else
-    for test in basic_boot heap_allocation file_system should_panic; do
-        run_test "$test" || true
-    done
+    # all: unified binary with basic_boot + heap_allocation + file_system (1 boot, 10 tests)
+    build_test "all"
+    run_one_test "all" || true
+    # should_panic: standalone panic-expected test (1 boot)
+    build_test "should_panic"
+    run_one_test "should_panic" || true
 
     # stack_overflow is flaky — skip by default
-    # run_test stack_overflow || true
+    # build_test stack_overflow
+    # run_one_test stack_overflow || true
 
     print_summary
     [ "$FAILED" -eq 0 ] || exit 1
