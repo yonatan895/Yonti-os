@@ -109,7 +109,7 @@ impl TlsfAllocator {
         // before the user data. We need a block large enough for:
         //   header + max_alignment_pad + size
         let worst_padding = align.saturating_sub(HEADER_SIZE);
-        let needed = (HEADER_SIZE + worst_padding + size).max(MIN_BLOCK_SIZE);
+        let needed = align_up(HEADER_SIZE + worst_padding + size, 8).max(MIN_BLOCK_SIZE);
 
         let (fli, sl) = Self::mapping(needed);
         let fli = fli.min(FL_COUNT - 1);
@@ -221,7 +221,9 @@ impl TlsfAllocator {
         let front_padding = aligned_start - user_start;
 
         // Total block size needed: header + front_padding + user_size
-        let total_consumed = HEADER_SIZE + front_padding + user_size;
+        // Ensure total_consumed is aligned to 8 bytes and at least MIN_BLOCK_SIZE to keep blocks aligned.
+        let total_consumed =
+            align_up(HEADER_SIZE + front_padding + user_size, 8).max(MIN_BLOCK_SIZE);
 
         // Verify the block is large enough (defense against TLSF bucket imprecision)
         if block_size < total_consumed {

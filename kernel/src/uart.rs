@@ -78,21 +78,8 @@ impl SerialPort {
 
     pub fn send(&mut self, data: u8) {
         unsafe {
-            match data {
-                8 | 0x7F => {
-                    // Backspace or DEL: send BS-space-BS to erase
-                    wait_for!(self.line_sts_flags() & LINE_STS_OUTPUT_EMPTY != 0);
-                    self.data.write(8);
-                    wait_for!(self.line_sts_flags() & LINE_STS_OUTPUT_EMPTY != 0);
-                    self.data.write(b' ');
-                    wait_for!(self.line_sts_flags() & LINE_STS_OUTPUT_EMPTY != 0);
-                    self.data.write(8);
-                }
-                _ => {
-                    wait_for!(self.line_sts_flags() & LINE_STS_OUTPUT_EMPTY != 0);
-                    self.data.write(data);
-                }
-            }
+            wait_for!(self.line_sts_flags() & LINE_STS_OUTPUT_EMPTY != 0);
+            self.data.write(data);
         }
     }
 }

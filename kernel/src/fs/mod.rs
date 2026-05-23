@@ -90,6 +90,14 @@ impl FileSystem {
     pub fn exists(&self, path: &str) -> bool {
         find_inode(&self.root, path).is_ok()
     }
+
+    /// Remove a file or directory at the given path.
+    pub fn remove(&mut self, path: &str) -> Result<(), &'static str> {
+        let (parent, name) = resolve_path(path)?;
+        let dir = find_dir_mut(&mut self.root, parent)?;
+        dir.remove_child(name)?;
+        Ok(())
+    }
 }
 
 impl Default for FileSystem {
@@ -133,12 +141,17 @@ fn resolve_path(path: &str) -> Result<(&str, &str), &'static str> {
         Some(idx) => {
             let parent = &path[..idx];
             let name = &path[idx + 1..];
-            if name.is_empty() {
+            if name.is_empty() || name == "." || name == ".." {
                 return Err("invalid path");
             }
             Ok((parent, name))
         }
-        None => Ok(("", path)),
+        None => {
+            if path == "." || path == ".." {
+                return Err("invalid path");
+            }
+            Ok(("", path))
+        }
     }
 }
 

@@ -48,3 +48,32 @@ fn nested_paths() {
     fs.write_file("/a/b/c.txt", b"deep").expect("write deep");
     assert_eq!(fs.read_file("/a/b/c.txt").unwrap(), b"deep");
 }
+
+#[test_case]
+fn delete_file_and_directory() {
+    let mut fs = yonti_os::fs::FS.lock();
+    fs.create_file("/todelete.txt")
+        .expect("create /todelete.txt");
+    assert!(fs.exists("/todelete.txt"));
+    fs.remove("/todelete.txt").expect("remove /todelete.txt");
+    assert!(!fs.exists("/todelete.txt"));
+
+    fs.create_dir("/deldir").expect("create /deldir");
+    fs.create_file("/deldir/file").expect("create /deldir/file");
+    assert!(fs.exists("/deldir/file"));
+    fs.remove("/deldir/file").expect("remove /deldir/file");
+    assert!(!fs.exists("/deldir/file"));
+    fs.remove("/deldir").expect("remove /deldir");
+    assert!(!fs.exists("/deldir"));
+}
+
+#[test_case]
+fn invalid_dot_paths() {
+    let mut fs = yonti_os::fs::FS.lock();
+    assert!(fs.create_file("/.").is_err());
+    assert!(fs.create_file("/..").is_err());
+    assert!(fs.create_dir("/.").is_err());
+    assert!(fs.create_dir("/..").is_err());
+    assert!(fs.create_file("/a/.").is_err());
+    assert!(fs.create_file("/a/..").is_err());
+}

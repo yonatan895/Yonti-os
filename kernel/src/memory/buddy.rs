@@ -55,11 +55,12 @@ impl BuddyAllocator {
         assert!(found_usable, "no usable memory regions");
 
         allocator.base_phys = base;
-        let total_frames = (last_end - base) as usize / 4096;
-        assert!(
-            total_frames <= MAX_TRACKED_FRAMES,
-            "too many physical frames to track"
-        );
+        let total_frames = ((last_end - base) / 4096) as usize;
+        let total_frames = if total_frames > MAX_TRACKED_FRAMES {
+            MAX_TRACKED_FRAMES
+        } else {
+            total_frames
+        };
         allocator.total_frames = total_frames;
         monitor::set_frame_metrics(total_frames);
 
@@ -71,7 +72,9 @@ impl BuddyAllocator {
             let start_idx = ((r.start - allocator.base_phys) / 4096) as usize;
             let end_idx = ((r.end - allocator.base_phys) / 4096) as usize;
             for idx in start_idx..end_idx {
-                allocator.mark_free(idx);
+                if idx < allocator.total_frames {
+                    allocator.mark_free(idx);
+                }
             }
         }
 
@@ -81,7 +84,14 @@ impl BuddyAllocator {
             .filter(|r| r.kind == MemoryRegionKind::Usable)
         {
             let mut pos = ((r.start - allocator.base_phys) / 4096) as usize;
-            let end = ((r.end - allocator.base_phys) / 4096) as usize;
+            let mut end = ((r.end - allocator.base_phys) / 4096) as usize;
+
+            if pos >= allocator.total_frames {
+                continue;
+            }
+            if end > allocator.total_frames {
+                end = allocator.total_frames;
+            }
 
             while pos < end {
                 let remaining = end - pos;
@@ -114,6 +124,9 @@ impl BuddyAllocator {
     }
 
     fn is_range_free(&self, start: usize, count: usize) -> bool {
+        if start + count > self.total_frames {
+            return false;
+        }
         for i in 0..count {
             if !self.is_free(start + i) {
                 return false;
