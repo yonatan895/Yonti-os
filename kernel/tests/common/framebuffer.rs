@@ -202,3 +202,57 @@ fn test_fallback_character() {
         "non-printable byte should render as fallback character"
     );
 }
+
+#[test_case]
+fn test_backspace_cursor() {
+    framebuffer::with_framebuffer_mut(|fb| {
+        fb.clear_screen();
+        fb.set_cursor(0, 0);
+        fb.write_byte(b'X');
+        fb.write_byte(0x08);
+    });
+
+    let pos = framebuffer::with_framebuffer(|fb| fb.cursor_position());
+    assert_eq!(pos, Some((0, 0)), "backspace should move cursor left");
+}
+
+#[test_case]
+fn test_backspace_no_underflow() {
+    framebuffer::with_framebuffer_mut(|fb| {
+        fb.clear_screen();
+        fb.set_cursor(0, 0);
+        fb.write_byte(0x08);
+    });
+
+    let pos = framebuffer::with_framebuffer(|fb| fb.cursor_position());
+    assert_eq!(
+        pos,
+        Some((0, 0)),
+        "backspace at column 0 should not underflow"
+    );
+}
+
+#[test_case]
+fn test_backspace_erase() {
+    framebuffer::with_framebuffer_mut(|fb| {
+        fb.clear_screen();
+        fb.set_cursor(0, 0);
+        fb.write_byte(b'X');
+        fb.write_byte(0x08);
+        fb.write_byte(b' ');
+        fb.write_byte(0x08);
+    });
+
+    let result = framebuffer::with_framebuffer(|fb| {
+        let (_, bg_g, bg_b) = fb.bg_color();
+        let pixel = fb.read_pixel(0, 0).unwrap();
+        (pixel, bg_g, bg_b)
+    });
+
+    let (pixel, bg_g, bg_b) = result.unwrap();
+    assert_eq!(
+        pixel,
+        (0, bg_g, bg_b),
+        "backspace-space-backspace should erase character to background"
+    );
+}
