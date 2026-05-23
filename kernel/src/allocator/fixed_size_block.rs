@@ -20,6 +20,7 @@ pub struct FixedSizeBlockAllocator {
 
 impl FixedSizeBlockAllocator {
     /// Creates an empty FixedSizeBlockAllocator.
+    #[allow(clippy::new_without_default)]
     pub const fn new() -> Self {
         const EMPTY: Option<&'static mut ListNode> = None;
         FixedSizeBlockAllocator {
@@ -30,11 +31,13 @@ impl FixedSizeBlockAllocator {
 
     /// Initialize the allocator with the given heap bounds.
     ///
-    /// This function is unsafe because the caller must guarantee that the given
-    /// heap bounds are valid and that the heap is unused. This method must be
-    /// called only once.
+    /// # Safety
+    ///
+    /// The caller must guarantee that the given heap bounds are valid,
+    /// the heap is unused, and this method is called only once.
     pub unsafe fn init(&mut self, heap_start: usize, heap_size: usize) {
-        self.fallback_allocator.init(heap_start, heap_size);
+        self.fallback_allocator
+            .init(heap_start as *mut u8, heap_size);
     }
 
     /// Allocates using the fallback allocator.

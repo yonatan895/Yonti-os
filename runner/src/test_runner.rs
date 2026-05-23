@@ -1,6 +1,6 @@
 use bootloader::DiskImageBuilder;
-use std::process::{self, Command};
 use std::path::PathBuf;
+use std::process::{self, Command};
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -18,7 +18,9 @@ fn main() {
 
     // Build bootable BIOS disk image from the test kernel binary
     let builder = DiskImageBuilder::new(kernel_path);
-    builder.create_bios_image(&bios_img).expect("failed to create BIOS test image");
+    builder
+        .create_bios_image(&bios_img)
+        .expect("failed to create BIOS test image");
 
     // Run QEMU
     let status = Command::new("qemu-system-x86_64")
@@ -38,8 +40,8 @@ fn main() {
     // QEMU exit code for Failed  = (0x11 << 1) | 1 = 35
     let code = status.code().unwrap_or(1);
     match code {
-        33 => process::exit(0),   // Success
-        35 => process::exit(1),   // Failed
+        33 => process::exit(0), // Success
+        35 => process::exit(1), // Failed
         _ => process::exit(code),
     }
 }

@@ -30,7 +30,8 @@ fn main(boot_info: &'static mut BootInfo) -> ! {
             .expect("physical_memory_offset not set"),
     );
     let mut mapper = unsafe { memory::init(phys_mem_offset) };
-    let mut frame_allocator = unsafe { BootInfoFrameAllocator::init(&mut boot_info.memory_regions) };
+    let mut frame_allocator =
+        unsafe { BootInfoFrameAllocator::init(&mut boot_info.memory_regions) };
     allocator::init_heap(&mut mapper, &mut frame_allocator).expect("heap initialization failed");
 
     test_main();
@@ -41,7 +42,8 @@ fn main(boot_info: &'static mut BootInfo) -> ! {
 fn create_and_read_file() {
     let mut fs = yonti_os::fs::FS.lock();
     fs.create_file("/test.txt").expect("create /test.txt");
-    fs.write_file("/test.txt", b"Hello, world!").expect("write /test.txt");
+    fs.write_file("/test.txt", b"Hello, world!")
+        .expect("write /test.txt");
     let data = fs.read_file("/test.txt").expect("read /test.txt");
     assert_eq!(data, b"Hello, world!");
 }
@@ -63,7 +65,8 @@ fn append_to_file() {
     let mut fs = yonti_os::fs::FS.lock();
     fs.create_file("/append.txt").expect("create /append.txt");
     fs.write_file("/append.txt", b"first").expect("write first");
-    fs.append_file("/append.txt", b"second").expect("append second");
+    fs.append_file("/append.txt", b"second")
+        .expect("append second");
     let data = fs.read_file("/append.txt").expect("read /append.txt");
     assert_eq!(data, b"firstsecond");
 }
