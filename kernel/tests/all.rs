@@ -8,10 +8,10 @@ extern crate alloc;
 
 #[path = "common/basic_boot.rs"]
 mod basic_boot;
-#[path = "common/heap_allocation.rs"]
-mod heap_allocation;
 #[path = "common/file_system.rs"]
 mod file_system;
+#[path = "common/heap_allocation.rs"]
+mod heap_allocation;
 
 use bootloader_api::{entry_point, BootInfo};
 use core::panic::PanicInfo;
@@ -40,8 +40,7 @@ fn test_kernel_main(boot_info: &'static mut BootInfo) -> ! {
     let mut mapper = unsafe { memory::init(phys_mem_offset) };
     let mut frame_allocator =
         BuddyAllocator::new(&boot_info.memory_regions, phys_mem_offset.as_u64());
-    allocator::init_heap(&mut mapper, &mut frame_allocator)
-        .expect("heap initialization failed");
+    allocator::init_heap(&mut mapper, &mut frame_allocator).expect("heap initialization failed");
 
     test_main();
     yonti_os::hlt_loop();
