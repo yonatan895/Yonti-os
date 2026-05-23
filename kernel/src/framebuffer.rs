@@ -204,6 +204,60 @@ impl FrameBufferWriter {
             }
         }
     }
+
+    pub fn read_pixel(&self, x: usize, y: usize) -> Option<(u8, u8, u8)> {
+        if x >= self.info.width || y >= self.info.height {
+            return None;
+        }
+        let offset = (y * self.info.stride + x) * self.info.bytes_per_pixel;
+        if offset + 2 >= self.buffer.len() {
+            return None;
+        }
+        match self.info.pixel_format {
+            PixelFormat::Rgb => Some((
+                self.buffer[offset],
+                self.buffer[offset + 1],
+                self.buffer[offset + 2],
+            )),
+            PixelFormat::Bgr => Some((
+                self.buffer[offset + 2],
+                self.buffer[offset + 1],
+                self.buffer[offset],
+            )),
+            _ => Some((
+                self.buffer[offset],
+                self.buffer[offset + 1],
+                self.buffer[offset + 2],
+            )),
+        }
+    }
+
+    pub fn cursor_position(&self) -> (usize, usize) {
+        (self.x_pos, self.y_pos)
+    }
+
+    pub fn dimensions(&self) -> (usize, usize) {
+        (self.info.width, self.info.height)
+    }
+
+    pub fn clear_screen(&mut self) {
+        self.buffer.fill(0);
+        self.x_pos = 0;
+        self.y_pos = 0;
+    }
+
+    pub fn set_cursor(&mut self, x: usize, y: usize) {
+        self.x_pos = x;
+        self.y_pos = y;
+    }
+
+    pub fn fg_color(&self) -> (u8, u8, u8) {
+        self.fg
+    }
+
+    pub fn bg_color(&self) -> (u8, u8, u8) {
+        self.bg
+    }
 }
 
 impl fmt::Debug for FrameBufferWriter {
@@ -231,6 +285,22 @@ static FRAMEBUFFER: Mutex<Option<FrameBufferWriter>> = Mutex::new(None);
 pub fn init(buffer: &'static mut [u8], info: FrameBufferInfo) {
     let writer = FrameBufferWriter::new(buffer, info);
     *FRAMEBUFFER.lock() = Some(writer);
+}
+
+pub fn with_framebuffer<F, R>(f: F) -> Option<R>
+where
+    F: FnOnce(&FrameBufferWriter) -> R,
+{
+    use x86_64::instructions::interrupts;
+    interrupts::without_interrupts(|| FRAMEBUFFER.lock().as_ref().map(f))
+}
+
+pub fn with_framebuffer_mut<F, R>(f: F) -> Option<R>
+where
+    F: FnOnce(&mut FrameBufferWriter) -> R,
+{
+    use x86_64::instructions::interrupts;
+    interrupts::without_interrupts(|| FRAMEBUFFER.lock().as_mut().map(f))
 }
 
 pub fn _print(args: fmt::Arguments) {
